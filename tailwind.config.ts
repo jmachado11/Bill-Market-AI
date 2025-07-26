@@ -52,6 +52,23 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
+				success: {
+					DEFAULT: 'hsl(var(--success))',
+					foreground: 'hsl(var(--success-foreground))'
+				},
+				warning: {
+					DEFAULT: 'hsl(var(--warning))',
+					foreground: 'hsl(var(--warning-foreground))'
+				},
+				likelihood: {
+					high: 'hsl(var(--likelihood-high))',
+					medium: 'hsl(var(--likelihood-medium))',
+					low: 'hsl(var(--likelihood-low))'
+				},
+				stock: {
+					up: 'hsl(var(--stock-up))',
+					down: 'hsl(var(--stock-down))'
+				},
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
 					foreground: 'hsl(var(--sidebar-foreground))',
