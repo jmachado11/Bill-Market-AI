@@ -99,12 +99,28 @@ serve(async (req) => {
       }
 
       // 5. Insert into Supabase
-      const introducedDate =
-        bill.introduced_date ??
-        (bill.introduced ? bill.introduced.split('T')[0] : new Date().toISOString().split('T')[0]);
-      const lastActionDate =
-        bill.last_action_date ??
-        (bill.last_action_date ? bill.last_action_date.split('T')[0] : new Date().toISOString().split('T')[0]);
+
+      //introduced_date logic
+      let introducedDate: string;
+      if (Array.isArray(bill.history) && bill.history.length > 0) {
+        // history sorted descending: earliest entry is last
+        const historyArr = bill.history.filter((h: any) => h.importance);
+        const arr = historyArr.length > 0 ? historyArr : bill.history;
+        introducedDate = arr[arr.length - 1].date;
+      } else {
+        introducedDate = bill.introduced_date
+          ?? (bill.introduced ? bill.introduced.split('T')[0] : new Date().toISOString().split('T')[0]);
+      }
+
+      //last_action logic
+      let last_event: string;
+      if (Array.isArray(bill.history) && bill.history.length > 0) {
+        // history sorted descending: first entry is latest
+        last_event = bill.history[0].action;
+      } else {
+        last_event = 'Went into ' + statusMap[bill.status];
+      }
+      
 
       const { data: inserted, error: insertErr } = await supabase
         .from('bills')
@@ -113,11 +129,14 @@ serve(async (req) => {
           title:            bill.title,
           description:      bill.description,
           sponsor_name:     bill.sponsors?.[0]?.name ?? '',
-          sponsor_party:    bill.sponsors?.[0]?.party ?? 'None',
-          sponsor_state:    bill.sponsors?.[0]?.state ?? '',
+          sponsor_party: (() => {
+            const p = bill.sponsors?.[0]?.party;
+            return (typeof p === 'string' && p.trim().length > 0) ? p : 'None';
+          })(),
+          sponsor_state:    bill.state ?? '',
           introduced_date:  introducedDate,
-          last_action:      bill.last_action,
-          last_action_date: lastActionDate,
+          last_action:      last_event,
+          last_action_date: bill.status_date,
           status:           statusMap[bill.status] ?? 'Unknown',
           chamber:          bill.chamber === 'H' ? 'house' : 'senate',
           document_url:     bill.url,
