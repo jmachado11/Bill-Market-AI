@@ -7,7 +7,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface LegiScanBill { /* … your full interface … */ }
+// Two-letter US State codes
+const STATES = [
+  'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA',
+  'HI','ID','IL','IN','IA','KS','KY','LA','ME','MD',
+  'MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ',
+  'NM','NY','NC','ND','OH','OK','OR','PA','RI','SC',
+  'SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
+];
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -17,163 +24,115 @@ serve(async (req) => {
   try {
     console.log("fetch-bills function started");
 
-    const legiscanApiKey = Deno.env.get("LEGISCAN_API_KEY")!;
-    const geminiApiKey   = Deno.env.get("GEMINI_API_KEY")!;
-    const supabaseUrl    = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey     = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    // must use the Service Role key here
-    const supabase = createClient(supabaseUrl, serviceKey);
-
-    // fetch list of recent bills
-    const legiscanUrl = `https://api.legiscan.com/?key=${legiscanApiKey}&op=getSearch&state=ALL&year=2024`;
-    const searchRes   = await fetch(legiscanUrl);
-    if (!searchRes.ok) throw new Error(`LegiScan search failed: ${searchRes.statusText}`);
-    const { status, searchresult } = await searchRes.json();
-    if (status !== "OK" || !Array.isArray(searchresult) || searchresult.length === 0) {
-      throw new Error("No bills returned from LegiScan");
+    const legiscanKey = Deno.env.get("LEGISCAN_API_KEY");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!legiscanKey || !supabaseUrl || !serviceKey) {
+      throw new Error("Missing environment variable(s)");
     }
 
-    const billsToProcess = searchresult.slice(0, 20);
+    const supabase = createClient(supabaseUrl, serviceKey);
 
-    for (const summary of billsToProcess) {
-      try {
-        // get detail
-        const detailRes = await fetch(
-          `https://api.legiscan.com/?key=${legiscanApiKey}&op=getBill&id=${summary.bill_id}`
-        );
-        if (!detailRes.ok) continue;
-        const detailJson = await detailRes.json();
-        if (detailJson.status !== "OK" || !detailJson.bill) continue;
-        const bill: any = detailJson.bill;
+    for (const state of STATES) {
+      console.log(`\nProcessing state ${state}...`);
 
-        // skip if already exists
-        const { data: existing } = await supabase
-          .from("bills")
-          .select("id")
-          .eq("legiscan_id", bill.bill_id)
-          .single();
-        if (existing) continue;
-
-        // analyze with Gemini
-        console.log(`Analyzing ${bill.bill_id}`);
-        const analysis = await analyzeWithGemini(bill, geminiApiKey);
-
-        // insert bill
-        const { data: inserted, error: insertErr } = await supabase
-          .from("bills")
-          .insert({
-            legiscan_id:           bill.bill_id,
-            title:                 bill.title || bill.bill_number,
-            description:           bill.description || "",
-            sponsor_name:          bill.sponsors?.[0]?.name || "",
-            sponsor_party:         bill.sponsors?.[0]?.party || "",
-            sponsor_state:         bill.sponsors?.[0]?.state || "",
-            introduced_date:       bill.introduced,
-            last_action:           bill.last_action,
-            last_action_date:      bill.last_action_date,
-            estimated_decision_date: analysis.estimatedDecisionDate,
-            passing_likelihood:    analysis.passingLikelihood,
-            status:                mapLegiScanStatus(bill.status),
-            chamber:               bill.chamber === "H" ? "house" : "senate",
-            document_url:          bill.url,
-            raw_legiscan_data:     bill,
-            gemini_analysis:       analysis,
-          })
-          .select()
-          .single();
-        if (insertErr) {
-          console.error("Insert bill error:", insertErr);
-          continue;
-        }
-
-        // insert stock predictions
-        if (analysis.affectedStocks.length) {
-          const stockRows = analysis.affectedStocks.map((s: any) => ({
-            bill_id:            inserted.id,
-            symbol:             s.symbol,
-            company_name:       s.companyName,
-            predicted_direction: s.predictedDirection,
-            confidence:         s.confidence,
-            reasoning:          s.reasoning,
-          }));
-          const { error: stockErr } = await supabase
-            .from("stock_predictions")
-            .insert(stockRows);
-          if (stockErr) console.error("Insert stocks error:", stockErr);
-        }
-
-        // throttle
-        await new Promise((r) => setTimeout(r, 1000));
-      } catch (innerErr) {
-        console.error("Error in bill loop:", innerErr);
+      // 1. Fetch master bill list for this state
+      const masterRes = await fetch(
+        `https://api.legiscan.com/?key=${legiscanKey}&op=getMasterListRaw&state=${state}`
+      );
+      if (!masterRes.ok) {
+        console.warn(`Failed to fetch master list for ${state}: ${masterRes.status}`);
+        continue;
       }
+      const masterJson = await masterRes.json();
+      if (masterJson.status !== 'OK' || !masterJson.masterlist) {
+        console.warn(`No master list returned for ${state}`);
+        continue;
+      }
+
+      // 2. Select the summary with the highest bill_id (most recently created)
+      const summaries = Object.values(masterJson.masterlist) as any[];
+      if (summaries.length === 0) continue;
+      const mostRecent = summaries.reduce((prev, curr) =>
+        curr.bill_id > prev.bill_id ? curr : prev
+      );
+      console.log(`Most recent bill for ${state}: ID=${mostRecent.bill_id}`);(`Most recent bill for ${state}: ID=${mostRecent.bill_id}, date=${mostRecent.status_date}`);
+
+      // 3. Fetch full bill details
+      let detailJson;
+      try {
+        const detailRes = await fetch(
+          `https://api.legiscan.com/?key=${legiscanKey}&op=getBill&id=${mostRecent.bill_id}`
+        );
+        if (!detailRes.ok) throw new Error(`Detail fetch failed: ${detailRes.status}`);
+        const detailData = await detailRes.json();
+        if (detailData.status !== 'OK' || !detailData.bill) {
+          throw new Error('Invalid bill detail');
+        }
+        detailJson = detailData.bill;
+      } catch (e) {
+        console.error(`Error fetching detail for bill ${mostRecent.bill_id}:`, e);
+        continue;
+      }
+
+            // 4. No date filter: we already selected the most recent bill
+            // 5. Skip if already exists (use maybeSingle to avoid errors on no rows)
+      const { data: exists, error: existErr } = await supabase
+        .from('bills')
+        .select('id')
+        .eq('legiscan_id', detailJson.bill_id)
+        .maybeSingle();
+      if (existErr) {
+        console.error('Error checking existing bill:', existErr);
+        continue;
+      }
+      if (exists) {
+        console.log(`Bill ${detailJson.bill_id} already exists, skipping`);
+        continue;
+      }
+
+      // 6. Insert into Supabase with state in description
+      const { data: inserted, error: insertErr } = await supabase
+        .from('bills')
+        .insert({
+          legiscan_id:       detailJson.bill_id,
+          state:             state,
+          title:             detailJson.title,
+          description:       `[${state}] ${detailJson.description || ''}`,
+          sponsor_name:      detailJson.sponsors?.[0]?.name ?? '',
+          sponsor_party:     detailJson.sponsors?.[0]?.party ?? '',
+          sponsor_state:     detailJson.sponsors?.[0]?.state ?? '',
+          introduced_date:   detailJson.introduced?.split('T')[0] ?? '',
+          last_action:       detailJson.last_action,
+          last_action_date:  detailJson.last_action_date?.split('T')[0] ?? '',
+          chamber:           detailJson.chamber === 'H' ? 'house' : 'senate',
+          status:            detailJson.status,
+          document_url:      detailJson.url,
+          raw_legiscan_data: detailJson
+        })
+        .select()
+        .single();
+
+      if (insertErr) {
+        console.error(`❌ Insert failed for bill ${detailJson.bill_id}:`, insertErr);
+      } else {
+        console.log(`✔️ Inserted bill id=${inserted.id}`);
+      }
+
+      // Throttle to avoid rate limits
+      await new Promise(r => setTimeout(r, 500));(r => setTimeout(r, 500));
     }
 
     return new Response(JSON.stringify({ success: true }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
+
   } catch (err) {
-    console.error("fetch-bills error:", err);
+    console.error('fetch-bills error:', err);
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 });
 
-/** Extracts analysis via Gemini */
-async function analyzeWithGemini(bill: any, apiKey: string) {
-  const prompt = `
-Analyze this legislative bill and respond with JSON:
-{
-  "passingLikelihood": number (1-99),
-  "estimatedDecisionDate": "YYYY-MM-DD",
-  "affectedStocks": [
-    {
-      "symbol": "…",
-      "companyName": "…",
-      "predictedDirection": "up"|"down",
-      "confidence": number (1-99),
-      "reasoning": "…"
-    }
-  ]
-}
-Bill:
-Title: ${bill.title}
-…etc.
-`;
-  try {
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-      }
-    );
-    if (!resp.ok) throw new Error(resp.statusText);
-    const { candidates } = await resp.json();
-    const text = candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
-    const json = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || "{}");
-    return {
-      passingLikelihood:    Math.min(99, Math.max(1, json.passingLikelihood || 1)),
-      estimatedDecisionDate: json.estimatedDecisionDate || new Date(Date.now() + 90*86400000).toISOString().split("T")[0],
-      affectedStocks:       (json.affectedStocks || []).slice(0, 5),
-    };
-  } catch {
-    return { passingLikelihood: 25, estimatedDecisionDate: new Date(Date.now()+90*86400000).toISOString().split("T")[0], affectedStocks: [] };
-  }
-}
-
-/** Map LegiScan status code to string */
-function mapLegiScanStatus(code: number) {
-  switch (code) {
-    case 1: return "introduced";
-    case 2: return "committee";
-    case 3: return "floor";
-    case 4: return "passed";
-    case 5: return "failed";
-    default: return "introduced";
-  }
-}
