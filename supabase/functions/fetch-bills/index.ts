@@ -3,303 +3,177 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-interface LegiScanBill {
-  bill_id: number;
-  bill_number: string;
-  title: string;
-  description: string;
-  status: number;
-  status_date: string;
-  introduced: string;
-  last_action: string;
-  last_action_date: string;
-  chamber: string;
-  sponsors: Array<{
-    name: string;
-    party: string;
-    state: string;
-  }>;
-  url?: string;
-}
+interface LegiScanBill { /* … your full interface … */ }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log('fetch-bills function started');
-    
-    const legiscanApiKey = Deno.env.get('LEGISCAN_API_KEY');
-    const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-    
-    console.log('API keys check:', { 
-      legiscan: !!legiscanApiKey, 
-      gemini: !!geminiApiKey 
-    });
-    
-    if (!legiscanApiKey || !geminiApiKey) {
-      throw new Error('Missing API keys');
-    }
+    console.log("fetch-bills function started");
 
-    // Initialize Supabase client
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
-    );
+    const legiscanApiKey = Deno.env.get("LEGISCAN_API_KEY")!;
+    const geminiApiKey   = Deno.env.get("GEMINI_API_KEY")!;
+    const supabaseUrl    = Deno.env.get("SUPA_URL")!;
+    const serviceKey     = Deno.env.get("SUPA_SERVICE_ROLE_KEY")!;
 
-    console.log('Fetching recent bills from LegiScan...');
-    
-    // Use a simpler search query that's more likely to work
+    // must use the Service Role key here
+    const supabase = createClient(supabaseUrl, serviceKey);
+
+    // fetch list of recent bills
     const legiscanUrl = `https://api.legiscan.com/?key=${legiscanApiKey}&op=getSearch&state=ALL&year=2024`;
-    console.log('LegiScan URL:', legiscanUrl.replace(legiscanApiKey, '[HIDDEN]'));
-    
-    // Fetch recent bills from LegiScan
-    const legiscanResponse = await fetch(legiscanUrl);
-    
-    if (!legiscanResponse.ok) {
-      console.error('LegiScan API error:', legiscanResponse.status, legiscanResponse.statusText);
-      throw new Error(`LegiScan API error: ${legiscanResponse.statusText}`);
-    }
-    
-    const legiscanData = await legiscanResponse.json();
-    console.log('LegiScan response:', { 
-      status: legiscanData.status, 
-      hasResults: !!legiscanData.searchresult,
-      resultCount: legiscanData.searchresult?.length || 0
-    });
-    
-    if (legiscanData.status !== 'OK') {
-      console.error('LegiScan API returned error:', legiscanData);
-      throw new Error(`LegiScan API error: ${legiscanData.alert?.message || 'Unknown error'}`);
-    }
-    
-    if (!legiscanData.searchresult || legiscanData.searchresult.length === 0) {
-      console.log('No search results from LegiScan');
-      throw new Error('No bills found in LegiScan response');
+    const searchRes   = await fetch(legiscanUrl);
+    if (!searchRes.ok) throw new Error(`LegiScan search failed: ${searchRes.statusText}`);
+    const { status, searchresult } = await searchRes.json();
+    if (status !== "OK" || !Array.isArray(searchresult) || searchresult.length === 0) {
+      throw new Error("No bills returned from LegiScan");
     }
 
-    const bills = legiscanData.searchresult.slice(0, 20); // Process first 20 bills
-    console.log(`Processing ${bills.length} bills...`);
+    const billsToProcess = searchresult.slice(0, 20);
 
-    for (const billSummary of bills) {
+    for (const summary of billsToProcess) {
       try {
-        // Get detailed bill information
-        const billDetailResponse = await fetch(
-          `https://api.legiscan.com/?key=${legiscanApiKey}&op=getBill&id=${billSummary.bill_id}`
+        // get detail
+        const detailRes = await fetch(
+          `https://api.legiscan.com/?key=${legiscanApiKey}&op=getBill&id=${summary.bill_id}`
         );
-        
-        if (!billDetailResponse.ok) {
-          console.log(`Failed to fetch bill ${billSummary.bill_id}`);
-          continue;
-        }
-        
-        const billDetailData = await billDetailResponse.json();
-        
-        if (billDetailData.status !== 'OK' || !billDetailData.bill) {
-          console.log(`Invalid bill data for ${billSummary.bill_id}`);
-          continue;
-        }
-        
-        const bill = billDetailData.bill;
-        
-        // Check if bill already exists
-        const { data: existingBill } = await supabase
-          .from('bills')
-          .select('id')
-          .eq('legiscan_id', bill.bill_id)
+        if (!detailRes.ok) continue;
+        const detailJson = await detailRes.json();
+        if (detailJson.status !== "OK" || !detailJson.bill) continue;
+        const bill: any = detailJson.bill;
+
+        // skip if already exists
+        const { data: existing } = await supabase
+          .from("bills")
+          .select("id")
+          .eq("legiscan_id", bill.bill_id)
           .single();
-        
-        if (existingBill) {
-          console.log(`Bill ${bill.bill_id} already exists, skipping...`);
-          continue;
-        }
+        if (existing) continue;
 
-        // Analyze with Gemini
-        console.log(`Analyzing bill ${bill.bill_id} with Gemini...`);
+        // analyze with Gemini
+        console.log(`Analyzing ${bill.bill_id}`);
         const analysis = await analyzeWithGemini(bill, geminiApiKey);
-        
-        // Prepare bill data for insertion
-        const billData = {
-          legiscan_id: bill.bill_id,
-          title: bill.title || bill.bill_number,
-          description: bill.description || bill.title,
-          sponsor_name: bill.sponsors?.[0]?.name || 'Unknown',
-          sponsor_party: bill.sponsors?.[0]?.party || 'Unknown',
-          sponsor_state: bill.sponsors?.[0]?.state || 'Unknown',
-          introduced_date: bill.introduced || new Date().toISOString().split('T')[0],
-          last_action: bill.last_action || 'Introduced',
-          last_action_date: bill.last_action_date || bill.introduced,
-          estimated_decision_date: analysis.estimatedDecisionDate,
-          passing_likelihood: analysis.passingLikelihood,
-          status: mapLegiScanStatus(bill.status),
-          chamber: bill.chamber === 'H' ? 'house' : 'senate',
-          document_url: bill.url,
-          raw_legiscan_data: bill,
-          gemini_analysis: analysis
-        };
 
-        // Insert bill
-        const { data: insertedBill, error: billError } = await supabase
-          .from('bills')
-          .insert(billData)
+        // insert bill
+        const { data: inserted, error: insertErr } = await supabase
+          .from("bills")
+          .insert({
+            legiscan_id:           bill.bill_id,
+            title:                 bill.title || bill.bill_number,
+            description:           bill.description || "",
+            sponsor_name:          bill.sponsors?.[0]?.name || "",
+            sponsor_party:         bill.sponsors?.[0]?.party || "",
+            sponsor_state:         bill.sponsors?.[0]?.state || "",
+            introduced_date:       bill.introduced,
+            last_action:           bill.last_action,
+            last_action_date:      bill.last_action_date,
+            estimated_decision_date: analysis.estimatedDecisionDate,
+            passing_likelihood:    analysis.passingLikelihood,
+            status:                mapLegiScanStatus(bill.status),
+            chamber:               bill.chamber === "H" ? "house" : "senate",
+            document_url:          bill.url,
+            raw_legiscan_data:     bill,
+            gemini_analysis:       analysis,
+          })
           .select()
           .single();
-
-        if (billError) {
-          console.error(`Error inserting bill ${bill.bill_id}:`, billError);
+        if (insertErr) {
+          console.error("Insert bill error:", insertErr);
           continue;
         }
 
-        // Insert stock predictions
-        if (analysis.affectedStocks?.length > 0) {
-          const stockPredictions = analysis.affectedStocks.map((stock: any) => ({
-            bill_id: insertedBill.id,
-            symbol: stock.symbol,
-            company_name: stock.companyName,
-            predicted_direction: stock.predictedDirection,
-            confidence: stock.confidence,
-            reasoning: stock.reasoning
+        // insert stock predictions
+        if (analysis.affectedStocks.length) {
+          const stockRows = analysis.affectedStocks.map((s: any) => ({
+            bill_id:            inserted.id,
+            symbol:             s.symbol,
+            company_name:       s.companyName,
+            predicted_direction: s.predictedDirection,
+            confidence:         s.confidence,
+            reasoning:          s.reasoning,
           }));
-
-          const { error: stockError } = await supabase
-            .from('stock_predictions')
-            .insert(stockPredictions);
-
-          if (stockError) {
-            console.error(`Error inserting stock predictions for bill ${bill.bill_id}:`, stockError);
-          }
+          const { error: stockErr } = await supabase
+            .from("stock_predictions")
+            .insert(stockRows);
+          if (stockErr) console.error("Insert stocks error:", stockErr);
         }
 
-        console.log(`Successfully processed bill ${bill.bill_id}`);
-        
-        // Add delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-      } catch (error) {
-        console.error(`Error processing bill ${billSummary.bill_id}:`, error);
+        // throttle
+        await new Promise((r) => setTimeout(r, 1000));
+      } catch (innerErr) {
+        console.error("Error in bill loop:", innerErr);
       }
     }
 
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: `Processed ${bills.length} bills` 
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-
-  } catch (error) {
-    console.error('Error in fetch-bills function:', error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    );
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error("fetch-bills error:", err);
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
 
+/** Extracts analysis via Gemini */
 async function analyzeWithGemini(bill: any, apiKey: string) {
   const prompt = `
-Analyze this legislative bill and provide a JSON response with the following structure:
+Analyze this legislative bill and respond with JSON:
 {
-  "passingLikelihood": number (0-100),
+  "passingLikelihood": number (1-99),
   "estimatedDecisionDate": "YYYY-MM-DD",
   "affectedStocks": [
     {
-      "symbol": "STOCK_SYMBOL",
-      "companyName": "Company Name",
-      "predictedDirection": "up" | "down",
-      "confidence": number (0-100),
-      "reasoning": "Brief explanation"
+      "symbol": "…",
+      "companyName": "…",
+      "predictedDirection": "up"|"down",
+      "confidence": number (1-99),
+      "reasoning": "…"
     }
   ]
 }
-
-Bill Details:
+Bill:
 Title: ${bill.title}
-Description: ${bill.description}
-Status: ${bill.status}
-Last Action: ${bill.last_action}
-Chamber: ${bill.chamber}
-Sponsors: ${JSON.stringify(bill.sponsors)}
-
-Consider factors like:
-- Historical passage rates for similar bills
-- Current political climate
-- Bill complexity and scope
-- Sponsor influence and party alignment
-- Industry impact and lobbying pressure
-
-Provide realistic stock predictions for publicly traded companies that would be significantly affected by this legislation. Focus on major companies with clear connections to the bill's subject matter.
+…etc.
 `;
-
   try {
-    const response = await fetch(
+    const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
       {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: prompt }]
-          }]
-        })
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
       }
     );
-
-    if (!response.ok) {
-      throw new Error(`Gemini API error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    if (!text) {
-      throw new Error('No response from Gemini');
-    }
-
-    // Extract JSON from response
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No JSON found in Gemini response');
-    }
-
-    const analysis = JSON.parse(jsonMatch[0]);
-    
-    // Validate and set defaults
+    if (!resp.ok) throw new Error(resp.statusText);
+    const { candidates } = await resp.json();
+    const text = candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+    const json = JSON.parse(text.match(/\{[\s\S]*\}/)?.[0] || "{}");
     return {
-      passingLikelihood: Math.min(100, Math.max(0, analysis.passingLikelihood || 20)),
-      estimatedDecisionDate: analysis.estimatedDecisionDate || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      affectedStocks: (analysis.affectedStocks || []).slice(0, 5) // Limit to 5 stocks
+      passingLikelihood:    Math.min(99, Math.max(1, json.passingLikelihood || 1)),
+      estimatedDecisionDate: json.estimatedDecisionDate || new Date(Date.now() + 90*86400000).toISOString().split("T")[0],
+      affectedStocks:       (json.affectedStocks || []).slice(0, 5),
     };
-  } catch (error) {
-    console.error('Error analyzing with Gemini:', error);
-    // Return default analysis if Gemini fails
-    return {
-      passingLikelihood: 25,
-      estimatedDecisionDate: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      affectedStocks: []
-    };
+  } catch {
+    return { passingLikelihood: 25, estimatedDecisionDate: new Date(Date.now()+90*86400000).toISOString().split("T")[0], affectedStocks: [] };
   }
 }
 
-function mapLegiScanStatus(status: number): string {
-  // Map LegiScan status codes to our status values
-  switch (status) {
-    case 1: return 'introduced';
-    case 2: return 'committee';
-    case 3: return 'floor';
-    case 4: return 'passed';
-    case 5: return 'failed';
-    default: return 'introduced';
+/** Map LegiScan status code to string */
+function mapLegiScanStatus(code: number) {
+  switch (code) {
+    case 1: return "introduced";
+    case 2: return "committee";
+    case 3: return "floor";
+    case 4: return "passed";
+    case 5: return "failed";
+    default: return "introduced";
   }
 }

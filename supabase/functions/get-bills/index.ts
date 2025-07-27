@@ -3,113 +3,80 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log('get-bills function called');
-    
-    // Initialize Supabase client
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
-    );
-    
-    console.log('Supabase client initialized');
+    console.log("get-bills function called");
 
-    // Fetch bills with their stock predictions
-    console.log('Fetching bills from database...');
-    const { data: bills, error } = await supabase
-      .from('bills')
-      .select(`
-        *,
-        stock_predictions (*)
-      `)
-      .order('introduced_date', { ascending: false });
+    const supabaseUrl = Deno.env.get("SUPA_URL")!;
+    const serviceKey  = Deno.env.get("SUPA_SERVICE_ROLE_KEY")!;
 
-    if (error) {
-      console.error('Database error:', error);
-      throw error;
-    }
-    
-    console.log(`Found ${bills?.length || 0} bills in database`);
+    // must use service role key to read/write freely
+    const supabase = createClient(supabaseUrl, serviceKey);
 
-    // If no bills found, trigger the fetch process
+    // first attempt to read all bills + stock_predictions
+    let { data: bills, error } = await supabase
+      .from("bills")
+      .select(`*, stock_predictions (*)`)
+      .order("introduced_date", { ascending: false });
+
+    // if none, trigger a fetch
     if (!bills || bills.length === 0) {
-      console.log('No bills found, triggering fetch...');
-      
-      // Call fetch-bills function to populate data
-      const fetchResponse = await supabase.functions.invoke('fetch-bills');
-      
-      if (fetchResponse.error) {
-        console.error('Error calling fetch-bills:', fetchResponse.error);
-      } else {
-        console.log('Fetch-bills completed:', fetchResponse.data);
-        
-        // Fetch bills again after populating
-        const { data: newBills, error: newError } = await supabase
-          .from('bills')
-          .select(`
-            *,
-            stock_predictions (*)
-          `)
-          .order('introduced_date', { ascending: false });
-          
-        if (!newError && newBills) {
-          console.log(`Found ${newBills.length} bills after fetch`);
-          bills = newBills;
-        }
-      }
+      console.log("no bills found, invoking fetch-bills");
+      const { data: fetchRes, error: fetchErr } = await supabase.functions.invoke("fetch-bills");
+      if (fetchErr) throw fetchErr;
+
+      // re-query
+      ({ data: bills, error } = await supabase
+        .from("bills")
+        .select(`*, stock_predictions (*)`)
+        .order("introduced_date", { ascending: false }));
     }
 
-    // Transform data to match frontend Bill interface
-    const transformedBills = (bills || []).map(bill => ({
-      id: bill.id,
-      title: bill.title,
-      description: bill.description,
+    if (error) throw error;
+
+    // transform for frontend
+    const out = bills.map((b: any) => ({
+      id:                    b.id,
+      title:                 b.title,
+      description:           b.description,
       sponsor: {
-        name: bill.sponsor_name,
-        party: bill.sponsor_party,
-        state: bill.sponsor_state
+        name:  b.sponsor_name,
+        party: b.sponsor_party,
+        state: b.sponsor_state,
       },
-      introducedDate: bill.introduced_date,
-      lastAction: bill.last_action,
-      lastActionDate: bill.last_action_date,
-      estimatedDecisionDate: bill.estimated_decision_date,
-      passingLikelihood: bill.passing_likelihood,
-      status: bill.status,
-      chamber: bill.chamber,
-      documentUrl: bill.document_url,
-      affectedStocks: (bill.stock_predictions || []).map((stock: any) => ({
-        symbol: stock.symbol,
-        companyName: stock.company_name,
-        predictedDirection: stock.predicted_direction,
-        confidence: stock.confidence,
-        reasoning: stock.reasoning
-      }))
+      introducedDate:        b.introduced_date,
+      lastAction:            b.last_action,
+      lastActionDate:        b.last_action_date,
+      estimatedDecisionDate: b.estimated_decision_date,
+      passingLikelihood:     b.passing_likelihood,
+      status:                b.status,
+      chamber:               b.chamber,
+      documentUrl:           b.document_url,
+      affectedStocks:        (b.stock_predictions || []).map((s: any) => ({
+        symbol:             s.symbol,
+        companyName:        s.company_name,
+        predictedDirection: s.predicted_direction,
+        confidence:         s.confidence,
+        reasoning:          s.reasoning,
+      })),
     }));
 
-    return new Response(
-      JSON.stringify(transformedBills),
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    );
-
-  } catch (error) {
-    console.error('Error in get-bills function:', error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    );
+    return new Response(JSON.stringify(out), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (err) {
+    console.error("get-bills error:", err);
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
