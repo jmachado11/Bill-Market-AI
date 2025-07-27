@@ -16,6 +16,14 @@ const STATES = [
   'SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
 ];
 
+const statusMap: Record<number, string> = {
+  1: 'Intro',
+  2: 'Engross',
+  3: 'Enroll',
+  4: 'Pass',
+  5: 'Veto',
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -28,7 +36,7 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!legiscanKey || !supabaseUrl || !serviceKey) {
-      throw new Error("Missing environment variable(s)");
+      throw new Error("Missing required environment variable(s)");
     }
 
     const supabase = createClient(supabaseUrl, serviceKey);
@@ -44,89 +52,93 @@ serve(async (req) => {
         console.warn(`Failed to fetch master list for ${state}: ${masterRes.status}`);
         continue;
       }
-      const masterJson = await masterRes.json();
-      if (masterJson.status !== 'OK' || !masterJson.masterlist) {
+      const masterData = await masterRes.json();
+      if (masterData.status !== 'OK' || !masterData.masterlist) {
         console.warn(`No master list returned for ${state}`);
         continue;
       }
 
-      // 2. Select the summary with the highest bill_id (most recently created)
-      const summaries = Object.values(masterJson.masterlist) as any[];
+      // 2. Select the summary with the most recent status_date
+      const summaries = Object.values(masterData.masterlist) as any[];
       if (summaries.length === 0) continue;
       const mostRecent = summaries.reduce((prev, curr) =>
-        curr.bill_id > prev.bill_id ? curr : prev
+        curr.status_date > prev.status_date ? curr : prev
       );
-      console.log(`Most recent bill for ${state}: ID=${mostRecent.bill_id}`);(`Most recent bill for ${state}: ID=${mostRecent.bill_id}, date=${mostRecent.status_date}`);
+      console.log(`Most recent bill for ${state}: ID=${mostRecent.bill_id}, status_date=${mostRecent.status_date}`);
 
       // 3. Fetch full bill details
-      let detailJson;
+      let bill: any;
       try {
         const detailRes = await fetch(
           `https://api.legiscan.com/?key=${legiscanKey}&op=getBill&id=${mostRecent.bill_id}`
         );
         if (!detailRes.ok) throw new Error(`Detail fetch failed: ${detailRes.status}`);
-        const detailData = await detailRes.json();
-        if (detailData.status !== 'OK' || !detailData.bill) {
+        const detailJson = await detailRes.json();
+        if (detailJson.status !== 'OK' || !detailJson.bill) {
           throw new Error('Invalid bill detail');
         }
-        detailJson = detailData.bill;
+        bill = detailJson.bill;
       } catch (e) {
         console.error(`Error fetching detail for bill ${mostRecent.bill_id}:`, e);
         continue;
       }
 
-            // 4. No date filter: we already selected the most recent bill
-            // 5. Skip if already exists (use maybeSingle to avoid errors on no rows)
+      // 4. Skip if already exists
       const { data: exists, error: existErr } = await supabase
         .from('bills')
         .select('id')
-        .eq('legiscan_id', detailJson.bill_id)
+        .eq('legiscan_id', bill.bill_id)
         .maybeSingle();
       if (existErr) {
         console.error('Error checking existing bill:', existErr);
         continue;
       }
       if (exists) {
-        console.log(`Bill ${detailJson.bill_id} already exists, skipping`);
+        console.log(`Bill ${bill.bill_id} already exists, skipping`);
         continue;
       }
 
-      // 6. Insert into Supabase with state in description
+      // 5. Insert into Supabase
+      const introducedDate =
+        bill.introduced_date ??
+        (bill.introduced ? bill.introduced.split('T')[0] : new Date().toISOString().split('T')[0]);
+      const lastActionDate =
+        bill.last_action_date ??
+        (bill.last_action_date ? bill.last_action_date.split('T')[0] : new Date().toISOString().split('T')[0]);
+
       const { data: inserted, error: insertErr } = await supabase
         .from('bills')
         .insert({
-          legiscan_id:       detailJson.bill_id,
-          state:             state,
-          title:             detailJson.title,
-          description:       `[${state}] ${detailJson.description || ''}`,
-          sponsor_name:      detailJson.sponsors?.[0]?.name ?? '',
-          sponsor_party:     detailJson.sponsors?.[0]?.party ?? '',
-          sponsor_state:     detailJson.sponsors?.[0]?.state ?? '',
-          introduced_date:   detailJson.introduced?.split('T')[0] ?? '',
-          last_action:       detailJson.last_action,
-          last_action_date:  detailJson.last_action_date?.split('T')[0] ?? '',
-          chamber:           detailJson.chamber === 'H' ? 'house' : 'senate',
-          status:            detailJson.status,
-          document_url:      detailJson.url,
-          raw_legiscan_data: detailJson
+          legiscan_id:      bill.bill_id,
+          title:            bill.title,
+          description:      bill.description,
+          sponsor_name:     bill.sponsors?.[0]?.name ?? '',
+          sponsor_party:    bill.sponsors?.[0]?.party ?? 'None',
+          sponsor_state:    bill.sponsors?.[0]?.state ?? '',
+          introduced_date:  introducedDate,
+          last_action:      bill.last_action,
+          last_action_date: lastActionDate,
+          status:           statusMap[bill.status] ?? 'Unknown',
+          chamber:          bill.chamber === 'H' ? 'house' : 'senate',
+          document_url:     bill.url,
+          raw_legiscan_data: bill
         })
         .select()
         .single();
 
       if (insertErr) {
-        console.error(`❌ Insert failed for bill ${detailJson.bill_id}:`, insertErr);
+        console.error(`❌ Insert failed for bill ${bill.bill_id}:`, insertErr);
       } else {
         console.log(`✔️ Inserted bill id=${inserted.id}`);
       }
 
       // Throttle to avoid rate limits
-      await new Promise(r => setTimeout(r, 500));(r => setTimeout(r, 500));
+      await new Promise((r) => setTimeout(r, 500));
     }
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
-
   } catch (err) {
     console.error('fetch-bills error:', err);
     return new Response(JSON.stringify({ error: err.message }), {
