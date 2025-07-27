@@ -15,8 +15,8 @@ serve(async (req) => {
   try {
     console.log("get-bills function called");
 
-    const supabaseUrl = Deno.env.get("SUPA_URL")!;
-    const serviceKey  = Deno.env.get("SUPA_SERVICE_ROLE_KEY")!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     // must use service role key to read/write freely
     const supabase = createClient(supabaseUrl, serviceKey);

@@ -19,8 +19,8 @@ serve(async (req) => {
 
     const legiscanApiKey = Deno.env.get("LEGISCAN_API_KEY")!;
     const geminiApiKey   = Deno.env.get("GEMINI_API_KEY")!;
-    const supabaseUrl    = Deno.env.get("SUPA_URL")!;
-    const serviceKey     = Deno.env.get("SUPA_SERVICE_ROLE_KEY")!;
+    const supabaseUrl    = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey     = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     // must use the Service Role key here
     const supabase = createClient(supabaseUrl, serviceKey);
