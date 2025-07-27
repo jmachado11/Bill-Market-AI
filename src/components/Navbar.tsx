@@ -19,8 +19,8 @@ export const Navbar = ({ searchQuery, onSearchChange, onFilterToggle }: NavbarPr
               <TrendingUp className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">LegisTracker</h1>
-              <p className="text-sm text-muted-foreground">Legislative Bill Analytics</p>
+              <h1 className="text-xl font-bold text-foreground">Bill Market</h1>
+              <p className="text-sm text-muted-foreground">AI Legislative Market Predictions</p>
             </div>
           </div>
 
