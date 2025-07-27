@@ -17,11 +17,19 @@ const STATES = [
 ];
 
 const statusMap: Record<number, string> = {
+  0: 'Pre-Filed',
   1: 'Intro',
   2: 'Engross',
   3: 'Enroll',
   4: 'Pass',
-  5: 'Veto',
+  5: 'Vetoed',
+  6: 'Failed',
+  7: 'Overrated',
+  8: 'Chaptered',
+  9: 'Refer',
+  10: 'Report Pass',
+  11: 'Report DNS',
+  12: 'Draft'
 };
 
 serve(async (req) => {
@@ -137,7 +145,7 @@ serve(async (req) => {
           introduced_date:  introducedDate,
           last_action:      last_event,
           last_action_date: bill.status_date,
-          status:           statusMap[bill.status] ?? 'Unknown',
+          status:           statusMap[bill.status] ?? 'Veto',
           chamber:          bill.chamber === 'H' ? 'house' : 'senate',
           document_url:     bill.url,
           raw_legiscan_data: bill
