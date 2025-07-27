@@ -1,1 +1,10 @@
 project_id = "ebzvluscnbkolzbqajcl"
+
+[functions.fetch-bills]
+verify_jwt = false
+
+[functions.get-bills]
+verify_jwt = false
+
+[functions.trigger-fetch]
+verify_jwt = false

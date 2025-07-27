@@ -13,13 +13,18 @@ serve(async (req) => {
   }
 
   try {
+    console.log('get-bills function called');
+    
     // Initialize Supabase client
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? ''
     );
+    
+    console.log('Supabase client initialized');
 
     // Fetch bills with their stock predictions
+    console.log('Fetching bills from database...');
     const { data: bills, error } = await supabase
       .from('bills')
       .select(`
@@ -29,11 +34,42 @@ serve(async (req) => {
       .order('introduced_date', { ascending: false });
 
     if (error) {
+      console.error('Database error:', error);
       throw error;
+    }
+    
+    console.log(`Found ${bills?.length || 0} bills in database`);
+
+    // If no bills found, trigger the fetch process
+    if (!bills || bills.length === 0) {
+      console.log('No bills found, triggering fetch...');
+      
+      // Call fetch-bills function to populate data
+      const fetchResponse = await supabase.functions.invoke('fetch-bills');
+      
+      if (fetchResponse.error) {
+        console.error('Error calling fetch-bills:', fetchResponse.error);
+      } else {
+        console.log('Fetch-bills completed:', fetchResponse.data);
+        
+        // Fetch bills again after populating
+        const { data: newBills, error: newError } = await supabase
+          .from('bills')
+          .select(`
+            *,
+            stock_predictions (*)
+          `)
+          .order('introduced_date', { ascending: false });
+          
+        if (!newError && newBills) {
+          console.log(`Found ${newBills.length} bills after fetch`);
+          bills = newBills;
+        }
+      }
     }
 
     // Transform data to match frontend Bill interface
-    const transformedBills = bills.map(bill => ({
+    const transformedBills = (bills || []).map(bill => ({
       id: bill.id,
       title: bill.title,
       description: bill.description,
@@ -50,7 +86,7 @@ serve(async (req) => {
       status: bill.status,
       chamber: bill.chamber,
       documentUrl: bill.document_url,
-      affectedStocks: bill.stock_predictions.map((stock: any) => ({
+      affectedStocks: (bill.stock_predictions || []).map((stock: any) => ({
         symbol: stock.symbol,
         companyName: stock.company_name,
         predictedDirection: stock.predicted_direction,

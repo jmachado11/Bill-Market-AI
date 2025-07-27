@@ -32,8 +32,15 @@ serve(async (req) => {
   }
 
   try {
+    console.log('fetch-bills function started');
+    
     const legiscanApiKey = Deno.env.get('LEGISCAN_API_KEY');
     const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+    
+    console.log('API keys check:', { 
+      legiscan: !!legiscanApiKey, 
+      gemini: !!geminiApiKey 
+    });
     
     if (!legiscanApiKey || !geminiApiKey) {
       throw new Error('Missing API keys');
@@ -47,20 +54,33 @@ serve(async (req) => {
 
     console.log('Fetching recent bills from LegiScan...');
     
+    // Use a simpler search query that's more likely to work
+    const legiscanUrl = `https://api.legiscan.com/?key=${legiscanApiKey}&op=getSearch&state=ALL&year=2024`;
+    console.log('LegiScan URL:', legiscanUrl.replace(legiscanApiKey, '[HIDDEN]'));
+    
     // Fetch recent bills from LegiScan
-    const legiscanResponse = await fetch(
-      `https://api.legiscan.com/?key=${legiscanApiKey}&op=getSearchRaw&year=2024&query=*`
-    );
+    const legiscanResponse = await fetch(legiscanUrl);
     
     if (!legiscanResponse.ok) {
+      console.error('LegiScan API error:', legiscanResponse.status, legiscanResponse.statusText);
       throw new Error(`LegiScan API error: ${legiscanResponse.statusText}`);
     }
     
     const legiscanData = await legiscanResponse.json();
-    console.log('LegiScan response status:', legiscanData.status);
+    console.log('LegiScan response:', { 
+      status: legiscanData.status, 
+      hasResults: !!legiscanData.searchresult,
+      resultCount: legiscanData.searchresult?.length || 0
+    });
     
-    if (legiscanData.status !== 'OK' || !legiscanData.searchresult) {
-      throw new Error('Invalid LegiScan response');
+    if (legiscanData.status !== 'OK') {
+      console.error('LegiScan API returned error:', legiscanData);
+      throw new Error(`LegiScan API error: ${legiscanData.alert?.message || 'Unknown error'}`);
+    }
+    
+    if (!legiscanData.searchresult || legiscanData.searchresult.length === 0) {
+      console.log('No search results from LegiScan');
+      throw new Error('No bills found in LegiScan response');
     }
 
     const bills = legiscanData.searchresult.slice(0, 20); // Process first 20 bills
