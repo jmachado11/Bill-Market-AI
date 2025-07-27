@@ -14,7 +14,113 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bills: {
+        Row: {
+          chamber: string
+          created_at: string
+          description: string | null
+          document_url: string | null
+          estimated_decision_date: string | null
+          gemini_analysis: Json | null
+          id: string
+          introduced_date: string
+          last_action: string | null
+          last_action_date: string | null
+          legiscan_id: number
+          passing_likelihood: number | null
+          raw_legiscan_data: Json | null
+          sponsor_name: string
+          sponsor_party: string
+          sponsor_state: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          chamber: string
+          created_at?: string
+          description?: string | null
+          document_url?: string | null
+          estimated_decision_date?: string | null
+          gemini_analysis?: Json | null
+          id?: string
+          introduced_date: string
+          last_action?: string | null
+          last_action_date?: string | null
+          legiscan_id: number
+          passing_likelihood?: number | null
+          raw_legiscan_data?: Json | null
+          sponsor_name: string
+          sponsor_party: string
+          sponsor_state: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          chamber?: string
+          created_at?: string
+          description?: string | null
+          document_url?: string | null
+          estimated_decision_date?: string | null
+          gemini_analysis?: Json | null
+          id?: string
+          introduced_date?: string
+          last_action?: string | null
+          last_action_date?: string | null
+          legiscan_id?: number
+          passing_likelihood?: number | null
+          raw_legiscan_data?: Json | null
+          sponsor_name?: string
+          sponsor_party?: string
+          sponsor_state?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      stock_predictions: {
+        Row: {
+          bill_id: string
+          company_name: string
+          confidence: number
+          created_at: string
+          id: string
+          predicted_direction: string
+          reasoning: string | null
+          symbol: string
+        }
+        Insert: {
+          bill_id: string
+          company_name: string
+          confidence: number
+          created_at?: string
+          id?: string
+          predicted_direction: string
+          reasoning?: string | null
+          symbol: string
+        }
+        Update: {
+          bill_id?: string
+          company_name?: string
+          confidence?: number
+          created_at?: string
+          id?: string
+          predicted_direction?: string
+          reasoning?: string | null
+          symbol?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_predictions_bill_id_fkey"
+            columns: ["bill_id"]
+            isOneToOne: false
+            referencedRelation: "bills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
