@@ -4,7 +4,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
 };
 
 serve(async (req) => {
@@ -16,16 +17,20 @@ serve(async (req) => {
     console.log("trigger-fetch function called");
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceKey  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    const { data, error } = await supabase.functions.invoke("fetch-bills");
-    if (error) throw error;
-
-    return new Response(JSON.stringify({ success: true, result: data }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    const fetchResponse = await supabase.functions.invoke("fetch-bills");
+    if (fetchResponse.error) throw fetchResponse.error;
+    const analyzeResponse = await supabase.functions.invoke("analyze-bills");
+    if (analyzeResponse.error) throw analyzeResponse.error;
+    return new Response(
+      JSON.stringify({ success: true, analyzeResult: analyzeResponse.data }),
+      {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
   } catch (err) {
     console.error("trigger-fetch error:", err);
     return new Response(JSON.stringify({ error: err.message }), {

@@ -14,11 +14,13 @@ export interface Bill {
   passingLikelihood: number; // 0-100
   status: 'introduced' | 'committee' | 'floor' | 'passed' | 'failed';
   chamber: 'house' | 'senate';
-  affectedStocks: StockPrediction[];
+  affectedStocksId: string[];
   documentUrl?: string;
 }
 
 export interface StockPrediction {
+  id:string;
+  billId:string;
   symbol: string;
   companyName: string;
   predictedDirection: 'up' | 'down';
