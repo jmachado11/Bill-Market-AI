@@ -7,7 +7,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Two-letter US State codes
+// Two-letter US State codes (only first 10 will be processed)
 const STATES = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA',
   'HI','ID','IL','IN','IA','KS','KY','LA','ME','MD',
@@ -41,7 +41,8 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    for (const state of STATES) {
+    // Only process first 10 states
+    for (const state of STATES.slice(0, 10)) {
       console.log(`\nProcessing state ${state}...`);
 
       // 1. Fetch master bill list for this state
@@ -98,21 +99,19 @@ serve(async (req) => {
         continue;
       }
 
-      // 5. Insert into Supabase
-
-      //introduced_date logic
+      // 5. Compute introduced_date
       let introducedDate: string;
       if (Array.isArray(bill.history) && bill.history.length > 0) {
-        // history sorted descending: earliest entry is last
         const historyArr = bill.history.filter((h: any) => h.importance);
         const arr = historyArr.length > 0 ? historyArr : bill.history;
+        // history sorted descending: earliest entry is last
         introducedDate = arr[arr.length - 1].date;
       } else {
         introducedDate = bill.introduced_date
           ?? (bill.introduced ? bill.introduced.split('T')[0] : new Date().toISOString().split('T')[0]);
       }
 
-      //last_action logic
+      // Compute last_action
       let last_event: string;
       if (Array.isArray(bill.history) && bill.history.length > 0) {
         // history sorted descending: first entry is latest
@@ -120,8 +119,8 @@ serve(async (req) => {
       } else {
         last_event = 'Went into ' + statusMap[bill.status];
       }
-      
 
+      // 6. Insert into Supabase
       const { data: inserted, error: insertErr } = await supabase
         .from('bills')
         .insert({
@@ -129,10 +128,7 @@ serve(async (req) => {
           title:            bill.title,
           description:      bill.description,
           sponsor_name:     bill.sponsors?.[0]?.name ?? '',
-          sponsor_party: (() => {
-            const p = bill.sponsors?.[0]?.party;
-            return (typeof p === 'string' && p.trim().length > 0) ? p : 'None';
-          })(),
+          sponsor_party:    (typeof bill.sponsors?.[0]?.party === 'string' && bill.sponsors[0].party.trim()) ? bill.sponsors[0].party : 'None',
           sponsor_state:    bill.state ?? '',
           introduced_date:  introducedDate,
           last_action:      last_event,
@@ -166,4 +162,3 @@ serve(async (req) => {
     });
   }
 });
-
