@@ -100,7 +100,7 @@ export const BillCard = ({ bill, onViewDetails }: BillCardProps) => {
                     <TrendingDown className="h-3 w-3 text-stock-down" />
                   )}
                   <span className="text-xs text-muted-foreground">
-                    {stock.confidence}%
+                    {stock.confidence*100}%
                   </span>
                 </div>
               ))}

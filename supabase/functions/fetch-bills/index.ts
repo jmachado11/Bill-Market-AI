@@ -7,7 +7,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Two-letter US State codes (only first 10 will be processed)
+// Two-letter US State codes
 const STATES = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA',
   'HI','ID','IL','IN','IA','KS','KY','LA','ME','MD',
@@ -41,9 +41,8 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // Only process first 10 states
-    for (const state of STATES.slice(0, 10)) {
-      console.log(`\nProcessing state ${state}...`);
+    for (const state of STATES) {
+      console.log(`Processing state ${state}...`);
 
       // 1. Fetch master bill list for this state
       const masterRes = await fetch(
@@ -104,7 +103,6 @@ serve(async (req) => {
       if (Array.isArray(bill.history) && bill.history.length > 0) {
         const historyArr = bill.history.filter((h: any) => h.importance);
         const arr = historyArr.length > 0 ? historyArr : bill.history;
-        // history sorted descending: earliest entry is last
         introducedDate = arr[arr.length - 1].date;
       } else {
         introducedDate = bill.introduced_date
@@ -114,10 +112,9 @@ serve(async (req) => {
       // Compute last_action
       let last_event: string;
       if (Array.isArray(bill.history) && bill.history.length > 0) {
-        // history sorted descending: first entry is latest
         last_event = bill.history[0].action;
       } else {
-        last_event = 'Went into ' + statusMap[bill.status];
+        last_event = `Went into ${statusMap[bill.status]}`;
       }
 
       // 6. Insert into Supabase

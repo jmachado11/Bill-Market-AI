@@ -155,7 +155,7 @@ export const BillDetails = ({ bill, isOpen, onClose }: BillDetailsProps) => {
                                   : 'border-stock-down text-stock-down'
                               )}
                             >
-                              {stock.confidence}% confidence
+                              {stock.confidence*100}% confidence
                             </Badge>
                           </div>
                           <span className="text-sm font-medium text-muted-foreground">
