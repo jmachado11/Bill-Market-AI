@@ -2,11 +2,6 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-/**
- * Edge Function: analyze-bills
- * Fetches bills missing analysis, sends them to Gemini in a single query,
- * and stores results in Supabase, limiting stock predictions to 5 per bill.
- */
 serve(async (req) => {
   const cors = {
     "Access-Control-Allow-Origin": "*",
@@ -34,198 +29,164 @@ serve(async (req) => {
 
     // Initialize Supabase client
     const db = createClient(SUPA_URL, SUPA_ROLE);
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
 
     // Fetch all bills without analysis
     const { data: bills, error: fetchErr } = await db
       .from("bills")
       .select("id,legiscan_id,title,description")
-      .is('affected_stock_ids', null);
+      .is("affected_stock_ids", null);
 
     if (fetchErr) {
       console.error("Supabase fetch error:", fetchErr);
       throw fetchErr;
     }
-
     if (!bills || bills.length === 0) {
       console.log("No bills to analyze.");
-      return new Response(JSON.stringify({ message: "No bills to analyze" }), {
-        status: 200,
-        headers: { ...cors, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ message: "No bills to analyze" }),
+        { status: 200, headers: { ...cors, "Content-Type": "application/json" } }
+      );
     }
-
     console.log(`Fetched ${bills.length} bills for analysis.`);
 
-    // Prepare Gemini prompt for all bills
-    const billsPayload = bills.map((bill) => ({
-      legiscan_id: bill.legiscan_id,
-      title: bill.title,
-      description: bill.description,
-    }));
+    const BATCH_SIZE = 2;
+    const processedLegiscanIds: number[] = [];
 
-    // Explicitly ask for an array of JSON objects
-    const prompt = `Analyze the following bills and return an array of JSON objects, one for each bill, in this exact JSON format without any extra text or code blocks. For each bill, give me at most 5 affectedStocks.
+    // Process bills in batches of 5
+    for (let i = 0; i < bills.length; i += BATCH_SIZE) {
+      const batch = bills.slice(i, i + BATCH_SIZE);
 
-Bills:
-${JSON.stringify(billsPayload)}
-
-Schema:
+      // Build a tiny prompt just for these 5
+      const billsPayload = batch.map((b) => ({
+        legiscan_id: b.legiscan_id,
+        title: b.title,
+        description: b.description?.slice(0, 500) ?? "",
+      }));
+      const prompt = `
+Analyze these ${billsPayload.length} bills. Return ONLY a JSON array of objects (no markdown).
+Each object must follow:
 [
   {
     "legiscan_id": number,
-    "passingLikelihood": number (0-1),
+    "passingLikelihood": number,
     "estimatedDecisionDate": "YYYY-MM-DD",
     "affectedStocks": [
       {
         "symbol": string,
         "companyName": string,
-        "predictedDirection": "up" | "down",
-        "confidence": number (0-1),
+        "predictedDirection": "up"|"down",
+        "confidence": number,
         "reasoning": string
       }
     ]
   }
 ]
 
-Output only valid JSON. Do not wrap it in triple backticks or say anything else.`;
+Bills:
+${JSON.stringify(billsPayload)}
+`.trim();
 
-    // Call Gemini generateText endpoint
-    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`;
-    console.log("Calling Gemini API...");
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [{ text: prompt }],
-            role: "user",
-          },
-        ],
-        generationConfig: {
-          temperature: 0.0,
-          maxOutputTokens: 2048, // Increased for potentially larger outputs
-        },
-      }),
-    });
+      console.log(`Calling Gemini for bills ${i + 1}-${i + batch.length}…`);
+      const resp = await fetch(geminiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.0, maxOutputTokens: 2048 },
+        }),
+      });
+      if (!resp.ok) {
+        const errTxt = await resp.text();
+        console.error(`Gemini API error ${resp.status}: ${errTxt}`);
+        throw new Error(`Gemini API error ${resp.status}`);
+      }
 
-    if (!response.ok) {
-      const errTxt = await response.text();
-      console.error(`Gemini API error ${response.status}: ${errTxt}`);
-      throw new Error(`Gemini API error ${response.status}: ${errTxt}`);
-    }
+      const raw = await resp.json();
+      let text = raw.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+      text = text.replace(/```/g, "").trim();
 
-    const raw = await response.json();
-    let text = raw.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-
-    console.log("Raw Gemini response (first part):", raw);
-    console.log("Extracted text from Gemini:", text);
-
-    // Clean up potential Markdown formatting or extra text
-    text = text
-      .replace(/^json\s*/, "") // Remove 'json' if Gemini adds it
-      .replace(/```/g, "")     // Remove triple backticks
-      .trim();
-
-    let analyses: any[];
-    try {
-      analyses = JSON.parse(text);
-      if (!Array.isArray(analyses)) {
-        console.warn("Gemini output was not an array. Attempting to wrap if it's a single object.");
-        // If Gemini returns a single object instead of an array, wrap it.
-        if (typeof analyses === 'object' && analyses !== null) {
-            analyses = [analyses];
-        } else {
-            throw new Error("Gemini output is not a valid array or single object.");
+      let analysesBatch: any[];
+      try {
+        analysesBatch = JSON.parse(text);
+        if (!Array.isArray(analysesBatch)) {
+          analysesBatch = [analysesBatch];
         }
+        console.log(`Parsed ${analysesBatch.length} analyses in this batch.`);
+      } catch (err) {
+        console.error("Failed to parse batch JSON:", err);
+        console.error("Problematic text:", text);
+        throw err;
       }
-      console.log(`Parsed ${analyses.length} analyses from Gemini.`);
-    } catch (err) {
-      console.error("Failed to parse Gemini JSON output:", err);
-      // Log the problematic text for debugging
-      console.error("Problematic text:", text);
-      throw new Error(`Failed to parse Gemini JSON output: ${err.message}`);
-    }
 
-    const processedLegiscanIds: number[] = [];
-
-    // Process each bill fetched from Supabase
-    for (const bill of bills) {
-      const analysis = analyses.find(
-        (a: any) => a.legiscan_id === bill.legiscan_id
-      );
-
-      if (!analysis) {
-        console.warn(
-          `No analysis found in Gemini's response for bill with legiscan_id: ${bill.legiscan_id}. Skipping bill update.`
+      // Update each bill from this batch
+      for (const bill of batch) {
+        const analysis = analysesBatch.find(
+          (a) => a.legiscan_id === bill.legiscan_id
         );
-        continue; // Skip this bill if no corresponding analysis was found
-      }
-
-      let affectedStockIds: number[] = [];
-      if (
-        Array.isArray(analysis.affectedStocks) &&
-        analysis.affectedStocks.length
-      ) {
-        // Limit to at most 5 stock predictions per bill
-        const rows = analysis.affectedStocks.slice(0, 5).map((s: any) => ({
-          bill_id: bill.id,
-          symbol: s.symbol,
-          company_name: s.companyName,
-          predicted_direction: s.predictedDirection,
-          confidence: s.confidence,
-          reasoning: s.reasoning,
-        }));
-
-        const { data: insertedData, error: insertError } = await db
-          .from("stock_predictions")
-          .insert(rows)
-          .select("id");
-
-        if (insertError) {
-          console.error(
-            `Error inserting stock predictions for bill ${bill.id} (legiscan_id: ${bill.legiscan_id}):`,
-            insertError
+        if (!analysis) {
+          console.warn(
+            `No analysis for legiscan_id ${bill.legiscan_id}; skipping.`
           );
-          // Decide whether to throw or continue. For robustness, we'll continue trying to update the bill.
-        } else {
-          affectedStockIds = insertedData.map((row) => row.id);
-          console.log(`Inserted ${affectedStockIds.length} stock predictions for bill ${bill.legiscan_id}.`);
+          continue;
         }
-      }
 
-      const { error: updateError } = await db
-        .from("bills")
-        .update({
-          passing_likelihood: analysis.passingLikelihood,
-          estimated_decision_date: analysis.estimatedDecisionDate,
-          affected_stock_ids: affectedStockIds,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", bill.id);
+        // Insert up to 5 stock predictions
+        let affectedStockIds: string[] = [];
+        if (Array.isArray(analysis.affectedStocks)) {
+          const rows = analysis.affectedStocks.slice(0, 5).map((s: any) => ({
+            bill_id: bill.id,
+            symbol: s.symbol,
+            company_name: s.companyName,
+            predicted_direction: s.predictedDirection,
+            confidence: s.confidence,
+            reasoning: s.reasoning,
+          }));
+          const { data: insertedData, error: insertErr } = await db
+            .from("stock_predictions")
+            .insert(rows)
+            .select("id");
+          if (insertErr) {
+            console.error(
+              `Error inserting stock predictions for ${bill.legiscan_id}:`,
+              insertErr
+            );
+          } else {
+            affectedStockIds = insertedData.map((r) => r.id);
+          }
+        }
 
-      if (updateError) {
-        console.error(
-          `Error updating bill ${bill.id} (legiscan_id: ${bill.legiscan_id}):`,
-          updateError
-        );
-      } else {
-        // --- LOG TO CONSOLE ON SUCCESS ---
-        console.log(`SUCCESS: Bill ${bill.legiscan_id} analysis and update completed.`);
-        // --- END LOG ---
-        processedLegiscanIds.push(bill.legiscan_id);
+        // Update the bill record
+        const { error: updateErr } = await db
+          .from("bills")
+          .update({
+            passing_likelihood: analysis.passingLikelihood,
+            estimated_decision_date: analysis.estimatedDecisionDate,
+            affected_stock_ids: affectedStockIds,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", bill.id);
+
+        if (updateErr) {
+          console.error(
+            `Error updating bill ${bill.legiscan_id}:`,
+            updateErr
+          );
+        } else {
+          console.log(`SUCCESS: Updated bill ${bill.legiscan_id}`);
+          processedLegiscanIds.push(bill.legiscan_id);
+        }
       }
     }
 
+    // Only return once every batch is done
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Successfully analyzed and updated ${processedLegiscanIds.length} bills.`,
+        message: `Analyzed & updated ${processedLegiscanIds.length} bills.`,
         processed_legiscan_ids: processedLegiscanIds,
       }),
-      {
-        headers: { ...cors, "Content-Type": "application/json" },
-      }
+      { headers: { ...cors, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("analyze-bills unhandled error:", error);
