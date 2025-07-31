@@ -39,6 +39,7 @@ serve(async (req) => {
     const { data: bills, error: fetchErr } = await db
       .from("bills")
       .select("id,legiscan_id,title,description")
+      .is('affected_stock_ids', null);
 
     if (fetchErr) {
       console.error("Supabase fetch error:", fetchErr);
@@ -103,7 +104,7 @@ Output only valid JSON. Do not wrap it in triple backticks or say anything else.
         ],
         generationConfig: {
           temperature: 0.0,
-          maxOutputTokens: 8192, // Increased for potentially larger outputs
+          maxOutputTokens: 2048, // Increased for potentially larger outputs
         },
       }),
     });
