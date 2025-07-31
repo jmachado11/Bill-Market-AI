@@ -12,8 +12,8 @@ interface BillCardProps {
 
 export const BillCard = ({ bill, onViewDetails }: BillCardProps) => {
   const getLikelihoodColor = (likelihood: number) => {
-    if (likelihood >= 70) return 'bg-likelihood-high text-white';
-    if (likelihood >= 40) return 'bg-likelihood-medium text-white';
+    if (likelihood >= 0.7) return 'bg-likelihood-high text-white';
+    if (likelihood >= 0.4) return 'bg-likelihood-medium text-white';
     return 'bg-likelihood-low text-white';
   };
 
@@ -58,7 +58,7 @@ export const BillCard = ({ bill, onViewDetails }: BillCardProps) => {
               'px-3 py-1 rounded-full text-sm font-medium',
               getLikelihoodColor(bill.passingLikelihood)
             )}>
-              {bill.passingLikelihood}% chance
+              {bill.passingLikelihood*100}% chance
             </div>
             <Badge variant={getStatusBadgeVariant(bill.status)} className="capitalize">
               {bill.status.replace('-', ' ')}
