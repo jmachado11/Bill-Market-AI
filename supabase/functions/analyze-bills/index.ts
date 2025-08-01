@@ -50,7 +50,7 @@ serve(async (req) => {
     }
     console.log(`Fetched ${bills.length} bills for analysis.`);
 
-    const BATCH_SIZE = 5;
+    const BATCH_SIZE = 10;
     const processedLegiscanIds: number[] = [];
 
     // Process bills in batches of 5
@@ -96,7 +96,7 @@ ${JSON.stringify(billsPayload)}
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.0, maxOutputTokens: 2048 },
+          generationConfig: { temperature: 0.0, maxOutputTokens: 10000 },
         }),
       });
       if (!resp.ok) {
