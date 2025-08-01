@@ -53,11 +53,11 @@ serve(async (req) => {
     const BATCH_SIZE = 10;
     const processedLegiscanIds: number[] = [];
 
-    // Process bills in batches of 5
+    // Process bills in batches of 10
     for (let i = 0; i < bills.length; i += BATCH_SIZE) {
       const batch = bills.slice(i, i + BATCH_SIZE);
 
-      // Build a tiny prompt just for these 5
+      // Build a tiny prompt just for these 10
       const billsPayload = batch.map((b) => ({
         legiscan_id: b.legiscan_id,
         title: b.title,
