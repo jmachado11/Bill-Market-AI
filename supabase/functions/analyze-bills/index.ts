@@ -43,14 +43,14 @@ serve(async (req) => {
     }
     if (!bills || bills.length === 0) {
       console.log("No bills to analyze.");
-      return new Response(
-        JSON.stringify({ message: "No bills to analyze" }),
-        { status: 200, headers: { ...cors, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ message: "No bills to analyze" }), {
+        status: 200,
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
     }
     console.log(`Fetched ${bills.length} bills for analysis.`);
 
-    const BATCH_SIZE = 2;
+    const BATCH_SIZE = 5;
     const processedLegiscanIds: number[] = [];
 
     // Process bills in batches of 5
@@ -64,7 +64,10 @@ serve(async (req) => {
         description: b.description?.slice(0, 500) ?? "",
       }));
       const prompt = `
-Analyze these ${billsPayload.length} bills. Return ONLY a JSON array of objects (no markdown).
+Analyze these ${
+        billsPayload.length
+      } bills. Return ONLY a JSON array of objects (no markdown) dont include any writing before or after the object.
+Only include publicly traded real stocks and include 5 stocks per bill.
 Each object must follow:
 [
   {
@@ -104,7 +107,12 @@ ${JSON.stringify(billsPayload)}
 
       const raw = await resp.json();
       let text = raw.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-      text = text.replace(/```/g, "").trim();
+      text = text
+        .replace(/```(?:json)?/gi, "")
+        .replace(/^json\s*/i, "")
+        .replace(/^\s*[\r\n]+/, "")
+        .replace(/\s*```$/, "")
+        .trim();
 
       let analysesBatch: any[];
       try {
@@ -168,10 +176,7 @@ ${JSON.stringify(billsPayload)}
           .eq("id", bill.id);
 
         if (updateErr) {
-          console.error(
-            `Error updating bill ${bill.legiscan_id}:`,
-            updateErr
-          );
+          console.error(`Error updating bill ${bill.legiscan_id}:`, updateErr);
         } else {
           console.log(`SUCCESS: Updated bill ${bill.legiscan_id}`);
           processedLegiscanIds.push(bill.legiscan_id);
