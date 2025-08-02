@@ -11,7 +11,7 @@ interface NavbarProps {
 export const Navbar = ({ searchQuery, onSearchChange, onFilterToggle }: NavbarProps) => {
   return (
     <nav className="sticky top-0 z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
-      <div className="container mx-auto px-4 py-4 sm:py-6 lg:py-8">
+      <div className="container mx-auto px-4 py-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
 
           {/* Logo and Title */}
