@@ -1,73 +1,88 @@
-# Welcome to your Lovable project
+# 📊 Bill Market AI – Predictive Legislative Intelligence for Investors
 
-## Project info
+**Bill Market** is an AI-powered platform that analyzes proposed U.S. legislation to forecast both:
 
-**URL**: https://lovable.dev/projects/993e5dcd-4940-4245-9f10-bdd8bf0bbf46
+- The **likelihood a bill will pass**, and  
+- The **publicly traded stocks** most likely to be impacted by that bill — including **directional effects** ("up" or "down") and **confidence levels**
 
-## How can I edit this code?
+By bridging legislative data with financial insight, Bill Market empowers investors to stay ahead of policy-driven market shifts.
 
-There are several ways of editing your application.
+---
 
-**Use Lovable**
+## 🚀 Features
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/993e5dcd-4940-4245-9f10-bdd8bf0bbf46) and start prompting.
+- 🔍 Real-time bill ingestion using the LegiScan API  
+- 🧠 AI-powered analysis with Google Gemini  
+- 📈 Predicts stock movement and impact confidence per bill  
+- 📅 Estimates legislative decision timelines  
+- 📊 Stores structured analysis in a Supabase-backed database  
+- 🌐 Live deployed frontend via Vercel
 
-Changes made via Lovable will be committed automatically to this repo.
+---
 
-**Use your preferred IDE**
+## 🛠️ Tech Stack
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+- **Frontend:** Vite + React + TailwindCSS  
+- **Backend:** Deno-based Edge Functions (via Supabase)  
+- **Database:** Supabase  
+- **APIs:**
+  - **LegiScan API** – for legislative data
+  - **Gemini API** – for AI-based text interpretation
+- **Hosting:** Vercel
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+---
 
-Follow these steps:
+## 📁 Project Structure
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+bill-market/
+├── edge-functions/ # Deno-based Gemini analysis logic
+├── src/ # React frontend (Vite)
+├── public/ # Static files
+├── supabase/ # Schema and migrations
+├── .env.local # Local environment variables (excluded from repo)
+└── README.md
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+yaml
+Copy
+Edit
 
-# Step 3: Install the necessary dependencies.
-npm i
+---
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+## 🔐 Environment Variables
+
+Make sure to define the following variables in your environment (e.g. `.env.local` for local dev, or via Vercel dashboard in production):
+
+```env
+# LegiScan API
+VITE_LEGISCAN_API_KEY=your_legiscan_api_key
+
+# Gemini AI (Google)
+VITE_GEMINI_API_KEY=your_gemini_api_key
+
+# Supabase Project
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
+Do not expose any secret or service-level keys in the frontend. Use serverless functions for sensitive operations.
 
-**Edit a file directly in GitHub**
+## 🚀 Deployment
+Push the project to GitHub
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Go to https://vercel.com
 
-**Use GitHub Codespaces**
+Import the repository and configure environment variables
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+Deploy
 
-## What technologies are used for this project?
+Vercel will automatically redeploy on every push to main.
 
-This project is built with:
+## 👥 Credits
+Bill Market is a collaborative project built by:
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+James Machado
 
-## How can I deploy this project?
+Sameen Majid
 
-Simply open [Lovable](https://lovable.dev/projects/993e5dcd-4940-4245-9f10-bdd8bf0bbf46) and click on Share -> Publish.
+Dmitry Raspopin
 
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+All rights reserved. This is a closed-source project not open to public contribution.
