@@ -63,32 +63,35 @@ serve(async (req) => {
         title: b.title,
         description: b.description?.slice(0, 500) ?? "",
       }));
-      const prompt = `
-Analyze these ${
-        billsPayload.length
-      } bills. Return ONLY a JSON array of objects (no markdown) dont include any writing before or after the object.
-Only include publicly traded real stocks and include 5 stocks per bill.
-Each object must follow:
+const prompt = `
+Analyze these ${billsPayload.length} bills. Return ONLY a JSON array of objects (no markdown). Do not include any text before or after the array.
+
+You MUST include exactly 5 publicly traded U.S. stocks for each bill, even if the predicted impact is uncertain. Do not use "none", "neutral", or skip any. You must choose either "up" or "down" for each stock's predictedDirection based on the most likely directional effect, even if confidence is low.
+
+Each object must follow this exact structure:
 [
   {
     "legiscan_id": number,
-    "passingLikelihood": number,
+    "passingLikelihood": number, // between 0 and 1
     "estimatedDecisionDate": "YYYY-MM-DD",
     "affectedStocks": [
       {
-        "symbol": string,
+        "symbol": string, // real U.S. stock ticker
         "companyName": string,
-        "predictedDirection": "up"|"down",
-        "confidence": number,
-        "reasoning": string
+        "predictedDirection": "up" | "down", // no "neutral"
+        "confidence": number, // between 0 and 1
+        "reasoning": string // 1-2 sentence explanation
       }
     ]
   }
 ]
 
+If you're unsure about a stock’s directional impact, make your best judgment based on the bill’s content and still assign "up" or "down" with a low confidence score.
+
 Bills:
 ${JSON.stringify(billsPayload)}
 `.trim();
+
 
       console.log(`Calling Gemini for bills ${i + 1}-${i + batch.length}…`);
       const resp = await fetch(geminiUrl, {
