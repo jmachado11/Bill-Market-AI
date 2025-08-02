@@ -16,7 +16,7 @@ CREATE TABLE public.bills (
   chamber TEXT NOT NULL,
   document_url TEXT,
   raw_legiscan_data JSONB,
-  gemini_analysis JSONB,
+  affected_stock_ids UUID[],
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );

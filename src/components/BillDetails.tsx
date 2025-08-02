@@ -17,8 +17,8 @@ export const BillDetails = ({ bill, isOpen, onClose }: BillDetailsProps) => {
   if (!bill) return null;
 
   const getLikelihoodColor = (likelihood: number) => {
-    if (likelihood >= 70) return 'text-likelihood-high';
-    if (likelihood >= 40) return 'text-likelihood-medium';
+    if (likelihood >= 0.7) return 'text-likelihood-high';
+    if (likelihood >= 0.4) return 'text-likelihood-medium';
     return 'text-likelihood-low';
   };
 
@@ -88,10 +88,10 @@ export const BillDetails = ({ bill, isOpen, onClose }: BillDetailsProps) => {
                 <div className="flex items-center justify-between">
                   <span className="text-lg font-medium">Probability of Passing</span>
                   <span className={cn('text-2xl font-bold', getLikelihoodColor(bill.passingLikelihood))}>
-                    {bill.passingLikelihood}%
+                    {bill.passingLikelihood*100}%
                   </span>
                 </div>
-                <Progress value={bill.passingLikelihood} className="h-3" />
+                <Progress value={bill.passingLikelihood*100} className="h-3" />
                 <div className="text-sm text-muted-foreground">
                   <strong>Last Action:</strong> {bill.lastAction}
                 </div>
@@ -155,7 +155,7 @@ export const BillDetails = ({ bill, isOpen, onClose }: BillDetailsProps) => {
                                   : 'border-stock-down text-stock-down'
                               )}
                             >
-                              {stock.confidence}% confidence
+                              {stock.confidence*100}% confidence
                             </Badge>
                           </div>
                           <span className="text-sm font-medium text-muted-foreground">

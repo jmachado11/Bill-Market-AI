@@ -64,11 +64,11 @@ const Index = () => {
       filtered = filtered.filter(bill => {
         switch (filterBy) {
           case 'high-likelihood':
-            return bill.passingLikelihood >= 70;
+            return bill.passingLikelihood >= 0.7;
           case 'medium-likelihood':
-            return bill.passingLikelihood >= 40 && bill.passingLikelihood < 70;
+            return bill.passingLikelihood >= 0.4 && bill.passingLikelihood < 0.7;
           case 'low-likelihood':
-            return bill.passingLikelihood < 40;
+            return bill.passingLikelihood < 0.4;
           default:
             return true;
         }
@@ -81,7 +81,7 @@ const Index = () => {
         case 'recent':
           return new Date(b.introducedDate).getTime() - new Date(a.introducedDate).getTime();
         case 'likelihood':
-          return b.passingLikelihood - a.passingLikelihood;
+          return b.passingLikelihood - a.passingLikelihood*100;
         case 'decision-date':
           return new Date(a.estimatedDecisionDate).getTime() - new Date(b.estimatedDecisionDate).getTime();
         default:
