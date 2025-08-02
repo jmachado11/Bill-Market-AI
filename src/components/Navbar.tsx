@@ -19,8 +19,8 @@ export const Navbar = ({ searchQuery, onSearchChange, onFilterToggle }: NavbarPr
               <img src="Bill Market Logo - Alternate.png"></img>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-foreground">Bill Market</h1>
-              <p className="text-sm text-muted-foreground">AI Legislative Market Predictions</p>
+              <h1 className="text-xl font-bold text-foreground">Bill Market AI</h1>
+              <p className="text-sm text-muted-foreground">Invest Like a Politician</p>
             </div>
           </div>
 

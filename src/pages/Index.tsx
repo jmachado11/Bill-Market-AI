@@ -109,7 +109,7 @@ const Index = () => {
                 Legislative Bills ({filteredAndSortedBills.length})
               </h2>
               <p className="text-muted-foreground">
-                Track proposed legislation and predicted market impact
+                AI Legislative Market Predictions
               </p>
             </div>
 
