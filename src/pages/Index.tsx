@@ -100,7 +100,7 @@ const Index = () => {
         onFilterToggle={() => setIsFilterOpen(!isFilterOpen)}
       />
       
-      <div className="container mx-auto px-4 py-6">
+      <div className="container mx-auto px-4 sm:p-6 lg:p-8">
         <div className="flex gap-6">
           {/* Main content */}
           <div className="flex-1 min-w-0">

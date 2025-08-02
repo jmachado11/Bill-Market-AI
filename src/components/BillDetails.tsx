@@ -1,5 +1,19 @@
-import { X, Calendar, User, Building2, TrendingUp, TrendingDown, ExternalLink, FileText } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  X,
+  Calendar,
+  User,
+  Building2,
+  TrendingUp,
+  TrendingDown,
+  ExternalLink,
+  FileText,
+} from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,30 +40,30 @@ export const BillDetails = ({ bill, isOpen, onClose }: BillDetailsProps) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       month: 'long',
       day: 'numeric',
-      year: 'numeric'
+      year: 'numeric',
     });
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-full sm:max-w-4xl max-h-[90vh] overflow-y-auto px-4 sm:px-6">
         <DialogHeader>
-          <DialogTitle className="text-xl leading-tight pr-8">
+          <DialogTitle className="text-lg sm:text-xl leading-tight pr-8">
             {bill.title}
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* Bill Overview */}
+          {/* Overview Section */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
+                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
                   <User className="h-5 w-5" />
                   Sponsor Information
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
+              <CardContent className="space-y-2 text-sm">
                 <div><strong>Name:</strong> {bill.sponsor.name}</div>
                 <div><strong>Party:</strong> {bill.sponsor.party}</div>
                 <div><strong>State:</strong> {bill.sponsor.state}</div>
@@ -59,16 +73,16 @@ export const BillDetails = ({ bill, isOpen, onClose }: BillDetailsProps) => {
 
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
+                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
                   <Calendar className="h-5 w-5" />
                   Timeline & Status
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
+              <CardContent className="space-y-2 text-sm">
                 <div><strong>Introduced:</strong> {formatDate(bill.introducedDate)}</div>
                 <div><strong>Last Action:</strong> {formatDate(bill.lastActionDate)}</div>
                 <div><strong>Est. Decision:</strong> {formatDate(bill.estimatedDecisionDate)}</div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <strong>Status:</strong>
                   <Badge variant="outline" className="capitalize">
                     {bill.status.replace('-', ' ')}
@@ -81,34 +95,32 @@ export const BillDetails = ({ bill, isOpen, onClose }: BillDetailsProps) => {
           {/* Passing Likelihood */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Passing Likelihood Analysis</CardTitle>
+              <CardTitle className="text-base sm:text-lg">Passing Likelihood Analysis</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-lg font-medium">Probability of Passing</span>
-                  <span className={cn('text-2xl font-bold', getLikelihoodColor(bill.passingLikelihood))}>
-                    {bill.passingLikelihood*100}%
-                  </span>
-                </div>
-                <Progress value={bill.passingLikelihood*100} className="h-3" />
-                <div className="text-sm text-muted-foreground">
-                  <strong>Last Action:</strong> {bill.lastAction}
-                </div>
+            <CardContent className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <span className="text-sm sm:text-base font-medium">Probability of Passing</span>
+                <span className={cn('text-xl font-bold', getLikelihoodColor(bill.passingLikelihood))}>
+                  {Math.round(bill.passingLikelihood * 100)}%
+                </span>
+              </div>
+              <Progress value={bill.passingLikelihood * 100} className="h-3" />
+              <div className="text-sm text-muted-foreground">
+                <strong>Last Action:</strong> {bill.lastAction}
               </div>
             </CardContent>
           </Card>
 
-          {/* Bill Description */}
+          {/* Description */}
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
+              <CardTitle className="text-base sm:text-lg flex items-center gap-2">
                 <FileText className="h-5 w-5" />
                 Bill Description
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground leading-relaxed">{bill.description}</p>
+            <CardContent className="text-sm text-muted-foreground leading-relaxed">
+              <p>{bill.description}</p>
               {bill.documentUrl && (
                 <div className="mt-4">
                   <Button variant="outline" asChild>
@@ -122,53 +134,49 @@ export const BillDetails = ({ bill, isOpen, onClose }: BillDetailsProps) => {
             </CardContent>
           </Card>
 
-          {/* Stock Impact Analysis */}
+          {/* Stock Impact */}
           {bill.affectedStocks.length > 0 && (
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
+                <CardTitle className="text-base sm:text-lg flex items-center gap-2">
                   <Building2 className="h-5 w-5" />
                   Predicted Stock Impact
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {bill.affectedStocks.map((stock) => (
-                    <div
-                      key={stock.symbol}
-                      className="flex items-start gap-4 p-4 rounded-lg bg-muted/50 border"
-                    >
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-lg">{stock.symbol}</span>
-                            {stock.predictedDirection === 'up' ? (
-                              <TrendingUp className="h-5 w-5 text-stock-up" />
-                            ) : (
-                              <TrendingDown className="h-5 w-5 text-stock-down" />
-                            )}
-                            <Badge 
-                              variant="outline" 
-                              className={cn(
-                                stock.predictedDirection === 'up' 
-                                  ? 'border-stock-up text-stock-up' 
-                                  : 'border-stock-down text-stock-down'
-                              )}
-                            >
-                              {stock.confidence*100}% confidence
-                            </Badge>
-                          </div>
-                          <span className="text-sm font-medium text-muted-foreground">
-                            {stock.companyName}
-                          </span>
-                        </div>
+              <CardContent className="space-y-4">
+                {bill.affectedStocks.map((stock) => (
+                  <div
+                    key={stock.symbol}
+                    className="flex flex-col sm:flex-row items-start gap-4 p-4 rounded-lg bg-muted/50 border"
+                  >
+                    <div className="flex-1 flex flex-col gap-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-base">{stock.symbol}</span>
+                        {stock.predictedDirection === 'up' ? (
+                          <TrendingUp className="h-4 w-4 text-stock-up" />
+                        ) : (
+                          <TrendingDown className="h-4 w-4 text-stock-down" />
+                        )}
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            stock.predictedDirection === 'up'
+                              ? 'border-stock-up text-stock-up'
+                              : 'border-stock-down text-stock-down'
+                          )}
+                        >
+                          {Math.round(stock.confidence * 100)}% confidence
+                        </Badge>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-muted-foreground">{stock.reasoning}</p>
+                      <div className="text-sm text-muted-foreground">
+                        {stock.companyName}
                       </div>
                     </div>
-                  ))}
-                </div>
+                    <div className="flex-1 text-sm text-muted-foreground">
+                      {stock.reasoning}
+                    </div>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           )}

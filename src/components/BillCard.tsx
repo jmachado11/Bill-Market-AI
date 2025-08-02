@@ -37,12 +37,13 @@ export const BillCard = ({ bill, onViewDetails }: BillCardProps) => {
   return (
     <Card className="group hover:shadow-lg transition-all duration-300 border-border/50 hover:border-primary/20">
       <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          {/* Title and Meta Info */}
           <div className="flex-1 min-w-0">
             <CardTitle className="text-lg leading-tight mb-2 group-hover:text-primary transition-colors">
               {bill.title}
             </CardTitle>
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm text-muted-foreground">
               <div className="flex items-center gap-1">
                 <User className="h-3 w-3" />
                 <span>{bill.sponsor.name} ({bill.sponsor.party}-{bill.sponsor.state})</span>
@@ -53,12 +54,14 @@ export const BillCard = ({ bill, onViewDetails }: BillCardProps) => {
               </div>
             </div>
           </div>
-          <div className="flex flex-col items-end gap-2">
+
+          {/* Likelihood and Status */}
+          <div className="flex flex-row sm:flex-col items-start sm:items-end gap-2">
             <div className={cn(
-              'px-3 py-1 rounded-full text-sm font-medium',
+              'px-3 py-1 rounded-full text-sm font-medium whitespace-nowrap',
               getLikelihoodColor(bill.passingLikelihood)
             )}>
-              {bill.passingLikelihood*100}% chance
+              {Math.round(bill.passingLikelihood * 100)}% chance
             </div>
             <Badge variant={getStatusBadgeVariant(bill.status)} className="capitalize">
               {bill.status.replace('-', ' ')}
@@ -100,7 +103,7 @@ export const BillCard = ({ bill, onViewDetails }: BillCardProps) => {
                     <TrendingDown className="h-3 w-3 text-stock-down" />
                   )}
                   <span className="text-xs text-muted-foreground">
-                    {stock.confidence*100}%
+                    {Math.round(stock.confidence * 100)}%
                   </span>
                 </div>
               ))}
@@ -113,17 +116,18 @@ export const BillCard = ({ bill, onViewDetails }: BillCardProps) => {
           </div>
         )}
 
-        <div className="flex gap-2 pt-2">
+        {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row gap-2 pt-2">
           <Button 
             onClick={() => onViewDetails(bill)}
             variant="default"
             size="sm"
-            className="flex-1"
+            className="w-full sm:w-auto"
           >
             View Details
           </Button>
           {bill.documentUrl && (
-            <Button variant="outline" size="sm" asChild>
+            <Button variant="outline" size="sm" className="w-full sm:w-auto" asChild>
               <a href={bill.documentUrl} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-4 w-4" />
               </a>
