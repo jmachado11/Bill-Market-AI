@@ -1,4 +1,4 @@
-# 📊 Bill Market – Predictive Legislative Intelligence for Investors
+# 📊 Bill Market AI – Predictive Legislative Intelligence for Investors
 
 **Bill Market** is an AI-powered platform that analyzes proposed U.S. legislation to forecast both:
 
