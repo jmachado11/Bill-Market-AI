@@ -8,7 +8,8 @@ import { Bill, SortOption, FilterOption } from '@/types/bill';
 import { loadStripe } from '@stripe/stripe-js';
 import { EmailPrompt } from '@/components/EmailPrompt';
 
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY!);
+const stripePromise = loadStripe(import.meta.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+const SUPABASE_FUNC_BASE = 'https://ebzvluscnbkolzbqajcl.functions.supabase.co';
 
 const Index = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -26,9 +27,13 @@ const Index = () => {
     const checkSubscription = async () => {
       const email = localStorage.getItem('user_email');
       if (!email) return;
-      const res = await fetch(`/functions/check-subscription?email=${email}`);
-      const data = await res.json();
-      setIsSubscribed(data?.is_subscribed);
+      try {
+        const res = await fetch(`${SUPABASE_FUNC_BASE}/check-subscription?email=${email}`);
+        const data = await res.json();
+        setIsSubscribed(data?.is_subscribed);
+      } catch (err) {
+        console.error('Subscription check failed:', err);
+      }
     };
     checkSubscription();
   }, []);
@@ -94,14 +99,20 @@ const Index = () => {
   }, [bills, searchQuery, sortBy, filterBy]);
 
   const startStripeCheckout = async (email: string) => {
-    const res = await fetch('/functions/create-checkout-session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email }),
-    });
-    const { id } = await res.json();
-    const stripe = await stripePromise;
-    await stripe?.redirectToCheckout({ sessionId: id });
+    try {
+      const res = await fetch(`${SUPABASE_FUNC_BASE}/create-checkout-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const { id } = await res.json();
+      if (!id) throw new Error('No session ID returned.');
+      const stripe = await stripePromise;
+      await stripe?.redirectToCheckout({ sessionId: id });
+    } catch (err) {
+      console.error('Stripe checkout failed:', err);
+      alert('Failed to start checkout.');
+    }
   };
 
   const handleSubscribe = async () => {
@@ -110,12 +121,16 @@ const Index = () => {
       setShowEmailPrompt(true);
       return;
     }
-    const res = await fetch(`/functions/check-subscription?email=${email}`);
-    const data = await res.json();
-    if (data?.is_subscribed) {
-      setIsSubscribed(true);
-    } else {
-      await startStripeCheckout(email);
+    try {
+      const res = await fetch(`${SUPABASE_FUNC_BASE}/check-subscription?email=${email}`);
+      const data = await res.json();
+      if (data?.is_subscribed) {
+        setIsSubscribed(true);
+      } else {
+        await startStripeCheckout(email);
+      }
+    } catch (err) {
+      console.error('Subscribe handler error:', err);
     }
   };
 
@@ -202,12 +217,16 @@ const Index = () => {
         <EmailPrompt onSubmit={async (email: string) => {
           localStorage.setItem('user_email', email);
           setShowEmailPrompt(false);
-          const res = await fetch(`/functions/check-subscription?email=${email}`);
-          const data = await res.json();
-          if (data?.is_subscribed) {
-            setIsSubscribed(true);
-          } else {
-            await startStripeCheckout(email);
+          try {
+            const res = await fetch(`${SUPABASE_FUNC_BASE}/check-subscription?email=${email}`);
+            const data = await res.json();
+            if (data?.is_subscribed) {
+              setIsSubscribed(true);
+            } else {
+              await startStripeCheckout(email);
+            }
+          } catch (err) {
+            console.error('Email prompt subscription check failed:', err);
           }
         }} />
       )}
