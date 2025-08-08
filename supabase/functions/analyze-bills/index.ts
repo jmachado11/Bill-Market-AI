@@ -73,7 +73,7 @@ Each object must follow this exact structure:
   {
     "legiscan_id": number,
     "passingLikelihood": number, // between 0 and 1
-    "estimatedDecisionDate": "YYYY-MM-DD",
+    "estimatedDecisionDate": "YYYY-MM-DD", //must be in the future
     "affectedStocks": [
       {
         "symbol": string, // real U.S. stock ticker

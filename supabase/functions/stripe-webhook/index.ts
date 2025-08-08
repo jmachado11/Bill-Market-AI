@@ -2,36 +2,94 @@ import Stripe from "https://esm.sh/stripe@12.3.0?target=deno";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, { apiVersion: "2023-10-16" });
-const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+/* ───── clients ─────────────────────────────────────────────────── */
+const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
+  apiVersion: "2023-10-16",
+});
+const supabase = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
+);
 
+const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET")!;
+
+/* ───── util: does this sub qualify? ────────────────────────────── */
+function subscriptionIsValid(sub: Stripe.Subscription): boolean {
+  if (!["active", "trialing"].includes(sub.status)) return false;
+
+  return sub.items.data.some((item) => {
+    const price = item.price;
+    return (
+      price.recurring?.interval === "month" &&
+      (price.unit_amount ?? 0) >= 1000 /* ≥ $10.00 */
+    );
+  });
+}
+
+async function getCustomerEmail(customerId: string) {
+  const c = await stripe.customers.retrieve(customerId);
+  return "email" in c ? (c.email as string | null) : null;
+}
+
+async function upsert(email: string, active: boolean) {
+  await supabase
+    .from("subscriptions")
+    .upsert({ email, is_subscribed: active }, { onConflict: "email" });
+}
+
+/* ───── Edge Function handler ───────────────────────────────────── */
 serve(async (req) => {
   const sig = req.headers.get("stripe-signature")!;
-  const body = await req.text();
+  const raw = await req.text();
 
-  let event;
+  let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(body, sig, Deno.env.get("STRIPE_WEBHOOK_SECRET")!);
+    event = stripe.webhooks.constructEvent(raw, sig, webhookSecret);
   } catch (err) {
-    return new Response(`Webhook Error: ${err.message}`, { status: 400 });
+    return new Response(`Webhook signature error: ${(err as Error).message}`, {
+      status: 400,
+    });
   }
 
-  if (event.type === "checkout.session.completed") {
-    const session = event.data.object;
-    const customerId = session.customer;
-    const email = session.customer_email;
+  switch (event.type) {
+    /* ── initial checkout ─────────────────────────────── */
+    case "checkout.session.completed": {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const subId = session.subscription as string | undefined;
+      const email =
+        session.customer_details?.email ??
+        (await getCustomerEmail(session.customer as string));
 
-    const existing = await supabase.from("subscriptions").select("*").eq("email", email).single();
-    if (existing.data) {
-      await supabase.from("subscriptions").update({ is_subscribed: true }).eq("email", email);
-    } else {
-      await supabase.from("subscriptions").insert({
-        email,
-        stripe_customer_id: customerId,
-        is_subscribed: true,
-      });
+      if (email && subId) {
+        const sub = await stripe.subscriptions.retrieve(subId, {
+          expand: ["items.data.price"],
+        });
+        await upsert(email, subscriptionIsValid(sub));
+      }
+      break;
     }
+
+    /* ── lifecycle changes ────────────────────────────── */
+    case "customer.subscription.created":
+    case "customer.subscription.updated":
+    case "customer.subscription.deleted": {
+      const sub = event.data.object as Stripe.Subscription;
+      const email = await getCustomerEmail(sub.customer as string);
+      if (email) await upsert(email, subscriptionIsValid(sub));
+      break;
+    }
+
+    /* ── payment failure ──────────────────────────────── */
+    case "invoice.payment_failed": {
+      const inv = event.data.object as Stripe.Invoice;
+      const email = await getCustomerEmail(inv.customer as string);
+      if (email) await upsert(email, false);
+      break;
+    }
+
+    default:
+    /* ignore other events */
   }
 
-  return new Response("ok", { status: 200 });
+  return new Response("ok");
 });
