@@ -10,36 +10,26 @@ import { EmailPrompt } from "@/components/EmailPrompt";
 import { supabase } from "@/integrations/supabase/client";
 import { Bill, SortOption, FilterOption } from "@/types/bill";
 
-const stripePromise = loadStripe(
-  import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY!
-);
-
-/* -------------------------------------------------------------------------- */
-/*                               React Component                              */
-/* -------------------------------------------------------------------------- */
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY!);
 
 const Index = () => {
-  /* ── UI state ──────────────────────────────────────────────────────────── */
+  /* ──────────────── UI + data state ──────────────── */
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("recent");
   const [filterBy, setFilterBy] = useState<FilterOption>("all");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  /* ── Data/state ────────────────────────────────────────────────────────── */
-  const [bills, setBills] = useState<Bill[]>([]);
-  const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [bills,    setBills]    = useState<Bill[]>([]);
+  const [selected, setSelected] = useState<Bill | null>(null);
 
-  /* ── UX helpers ────────────────────────────────────────────────────────── */
-  const [showEmailPrompt, setShowEmailPrompt] = useState(false);
+  const [loading, setLoading]     = useState(true);
+  const [error,   setError]       = useState<string | null>(null);
+  const [pro,     setPro]         = useState(false);
+  const [askMail, setAskMail]     = useState(false);
 
-  /* ---------------------------------------------------------------------- */
-  /*                       Initial subscription check                       */
-  /* ---------------------------------------------------------------------- */
+  /* ────────── initial subscription check ─────────── */
   useEffect(() => {
-    const checkSubscription = async () => {
+    const run = async () => {
       const email = localStorage.getItem("user_email");
       if (!email) return;
 
@@ -49,18 +39,15 @@ const Index = () => {
           { body: { email } }
         );
         if (error) throw error;
-        setIsSubscribed((data as any)?.is_subscribed);
-      } catch (err) {
-        console.error("Subscription check failed:", err);
+        setPro((data as any)?.is_subscribed);
+      } catch (e) {
+        console.error("Subscription check failed:", e);
       }
     };
-
-    checkSubscription();
+    run();
   }, []);
 
-  /* ---------------------------------------------------------------------- */
-  /*                              Load bills                                */
-  /* ---------------------------------------------------------------------- */
+  /* ───────────── fetch bills on load ─────────────── */
   useEffect(() => {
     const fetchBills = async () => {
       try {
@@ -68,29 +55,23 @@ const Index = () => {
         const { data, error } = await supabase.functions.invoke("get-bills");
         if (error) throw error;
         setBills((data as Bill[]) ?? []);
-        setError(null);
-      } catch (err) {
-        console.error("Error fetching bills:", err);
+      } catch (e) {
+        console.error("Error fetching bills:", e);
         setError("Failed to load bills. Please try again later.");
-        setBills([]);
       } finally {
         setLoading(false);
       }
     };
-
     fetchBills();
   }, []);
 
-  /* ---------------------------------------------------------------------- */
-  /*                        Derived list: filter + sort                     */
-  /* ---------------------------------------------------------------------- */
-  const filteredAndSortedBills = useMemo(() => {
-    let filtered = bills;
+  /* ─────────────── filter / sort ──────────────── */
+  const displayBills = useMemo(() => {
+    let out = bills;
 
-    // Search
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(
+      out = out.filter(
         (b) =>
           b.title.toLowerCase().includes(q) ||
           b.description.toLowerCase().includes(q) ||
@@ -98,89 +79,53 @@ const Index = () => {
       );
     }
 
-    // Likelihood filter
     if (filterBy !== "all") {
-      filtered = filtered.filter((b) => {
-        if (filterBy === "high-likelihood") return b.passingLikelihood >= 0.7;
-        if (filterBy === "medium-likelihood")
-          return b.passingLikelihood >= 0.4 && b.passingLikelihood < 0.7;
-        if (filterBy === "low-likelihood") return b.passingLikelihood < 0.4;
+      out = out.filter((b) => {
+        if (filterBy === "high-likelihood")   return b.passingLikelihood >= 0.7;
+        if (filterBy === "medium-likelihood") return b.passingLikelihood >= 0.4 && b.passingLikelihood < 0.7;
+        if (filterBy === "low-likelihood")    return b.passingLikelihood < 0.4;
         return true;
       });
     }
 
-    // Sorting
-    return [...filtered].sort((a, b) => {
+    return [...out].sort((a, b) => {
       if (sortBy === "recent")
-        return (
-          new Date(b.introducedDate).getTime() -
-          new Date(a.introducedDate).getTime()
-        );
+        return +new Date(b.introducedDate) - +new Date(a.introducedDate);
       if (sortBy === "likelihood")
-        return b.passingLikelihood - a.passingLikelihood; // ← fixed bug
+        return b.passingLikelihood - a.passingLikelihood;
       if (sortBy === "decision-date")
-        return (
-          new Date(a.estimatedDecisionDate).getTime() -
-          new Date(b.estimatedDecisionDate).getTime()
-        );
+        return +new Date(a.estimatedDecisionDate) - +new Date(b.estimatedDecisionDate);
       return 0;
     });
   }, [bills, searchQuery, sortBy, filterBy]);
 
-  /* ---------------------------------------------------------------------- */
-  /*                        Stripe checkout wrapper                         */
-  /* ---------------------------------------------------------------------- */
-  const startStripeCheckout = async (email: string) => {
-    try {
-      const { data, error } = await supabase.functions.invoke(
-        "create-checkout-session",
-        { body: { email } }
-      );
-      if (error) throw error;
+  /* ─────────────── Stripe helpers ──────────────── */
+  const checkout = async (email: string) => {
+    const { data, error } = await supabase.functions.invoke(
+      "create-checkout-session",
+      { body: { email } }
+    );
+    if (error) throw error;
 
-      const { id } = data as { id?: string };
-      if (!id) return alert("Stripe session failed to create.");
-
-      const stripe = await stripePromise;
-      if (!stripe) return alert("Stripe.js failed to load.");
-
-      await stripe.redirectToCheckout({ sessionId: id });
-    } catch (err) {
-      console.error("Stripe checkout failed:", err);
-      alert("Failed to start checkout.");
-    }
+    const stripe = await stripePromise;
+    await stripe?.redirectToCheckout({ sessionId: (data as any).id });
   };
 
-  /* ---------------------------------------------------------------------- */
-  /*                         Subscribe button handler                       */
-  /* ---------------------------------------------------------------------- */
   const handleSubscribe = async () => {
     const email = localStorage.getItem("user_email");
-    if (!email) {
-      setShowEmailPrompt(true);
-      return;
-    }
+    if (!email) return setAskMail(true);
 
-    try {
-      const { data, error } = await supabase.functions.invoke(
-        "check-subscription",
-        { body: { email } }
-      );
-      if (error) throw error;
+    const { data, error } = await supabase.functions.invoke(
+      "check-subscription",
+      { body: { email } }
+    );
+    if (error) return console.error(error);
 
-      if ((data as any)?.is_subscribed) {
-        setIsSubscribed(true);
-      } else {
-        await startStripeCheckout(email);
-      }
-    } catch (err) {
-      console.error("Subscribe handler error:", err);
-    }
+    if ((data as any).is_subscribed) setPro(true);
+    else await checkout(email);
   };
 
-  /* ---------------------------------------------------------------------- */
-  /*                                  JSX                                   */
-  /* ---------------------------------------------------------------------- */
+  /* ─────────────────── JSX ─────────────────── */
   return (
     <div className="min-h-screen bg-background">
       <Navbar
@@ -191,21 +136,21 @@ const Index = () => {
 
       <div className="container mx-auto px-4 py-6">
         <div className="flex gap-6">
-          {/* ───── Left column (bill list) ───── */}
-          <div className="flex-1 min-w-0">
+          {/* ── Left column ── */}
+          <main className="flex-1 min-w-0">
             <header className="mb-6">
               <h2 className="text-2xl font-bold mb-2">
                 AI Legislative Market Predictions
               </h2>
               <p className="text-muted-foreground">
-                Legislative Bills ({filteredAndSortedBills.length})
+                Legislative Bills ({displayBills.length})
               </p>
             </header>
 
             <div className="grid gap-6">
               {loading ? (
                 <p className="text-center text-lg py-12 text-muted-foreground">
-                  Loading bills...
+                  Loading bills…
                 </p>
               ) : error ? (
                 <div className="text-center py-12">
@@ -217,28 +162,29 @@ const Index = () => {
                     Retry
                   </button>
                 </div>
-              ) : filteredAndSortedBills.length ? (
+              ) : displayBills.length ? (
                 <>
-                  {filteredAndSortedBills
-                    .slice(
-                      0,
-                      isSubscribed ? filteredAndSortedBills.length : 5
-                    )
-                    .map((bill) => (
-                      <BillCard
-                        key={bill.id}
-                        bill={bill}
-                        onViewDetails={setSelectedBill}
-                      />
+                  {displayBills
+                    .slice(0, pro ? displayBills.length : 5)
+                    .map((b) => (
+                      <BillCard key={b.id} bill={b} onViewDetails={setSelected} />
                     ))}
 
-                  {!isSubscribed && filteredAndSortedBills.length > 5 && (
-                    <div className="flex justify-center items-center mt-4">
+                  {!pro && displayBills.length > 5 && (
+                    <div className="flex justify-center mt-4">
                       <button
                         onClick={handleSubscribe}
-                        className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90 text-lg font-semibold shadow"
+                        className="
+                          sm:px-6 sm:py-3 px-4 py-2
+                          bg-primary text-white rounded-lg font-semibold shadow
+                          hover:bg-primary/90
+                          text-sm sm:text-lg
+                        "
                       >
-                        Subscribe to Pro to Unlock More Bills
+                        <span className="hidden sm:inline">
+                          Subscribe to Pro to Unlock More Bills
+                        </span>
+                        <span className="sm:hidden">Unlock Pro</span>
                       </button>
                     </div>
                   )}
@@ -249,9 +195,9 @@ const Index = () => {
                 </p>
               )}
             </div>
-          </div>
+          </main>
 
-          {/* ───── Right column (filters) ───── */}
+          {/* ── Right column (desktop filters) ── */}
           <aside className="hidden lg:block w-80">
             <div className="sticky top-24">
               <FilterSidebar
@@ -276,42 +222,26 @@ const Index = () => {
         onSortChange={setSortBy}
         filterBy={filterBy}
         onFilterChange={setFilterBy}
-      />
-      </div>
+      /></div>
 
-      {/* Drawer with bill details */}
+      {/* Bill details drawer */}
       <BillDetails
-        bill={selectedBill}
-        isOpen={!!selectedBill}
-        onClose={() => setSelectedBill(null)}
+        bill={selected}
+        isOpen={!!selected}
+        onClose={() => setSelected(null)}
       />
 
-      {/* Ask for an email if needed */}
-      {showEmailPrompt && (
+      {/* Email prompt */}
+      {askMail && (
         <EmailPrompt
           onSubmit={async (email) => {
             localStorage.setItem("user_email", email);
-            setShowEmailPrompt(false);
-
-            try {
-              const { data, error } = await supabase.functions.invoke(
-                "check-subscription",
-                { body: { email } }
-              );
-              if (error) throw error;
-
-              if ((data as any)?.is_subscribed) {
-                setIsSubscribed(true);
-              } else {
-                await startStripeCheckout(email);
-              }
-            } catch (err) {
-              console.error("Email prompt subscription check failed:", err);
-            }
+            setAskMail(false);
+            await handleSubscribe();
           }}
         />
       )}
-    </div>
+</div>
   );
 };
 
