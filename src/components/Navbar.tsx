@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, Filter, TrendingUp } from "lucide-react";
+import {
+  Menu as MenuIcon,
+  X as CloseIcon,
+  Search,
+  Filter,
+  TrendingUp,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,15 +19,16 @@ import { loadStripe } from "@stripe/stripe-js";
 const pk =
   import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY ||
   import.meta.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
-
 const stripePromise = pk ? loadStripe(pk) : null;
 
-/* ─── component ────────────────────────────────────────────────── */
+/* ─── props ────────────────────────────────────────────────────── */
 interface Props {
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onFilterToggle: () => void;
 }
+
+/* ─── component ────────────────────────────────────────────────── */
 export const Navbar = ({
   searchQuery,
   onSearchChange,
@@ -29,8 +36,9 @@ export const Navbar = ({
 }: Props) => {
   const [loading, setLoading] = useState(false);
   const [showEmailPrompt, setShowEmailPrompt] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
-  /* 1️⃣  Fetch Stripe customer portal URL */
+  /* ─────────── Stripe helpers ─────────── */
   const openPortal = async (email: string) => {
     setLoading(true);
     const { data, error } = await supabase.functions.invoke(
@@ -42,7 +50,6 @@ export const Navbar = ({
     window.location.href = (data as { url: string }).url;
   };
 
-  /* 2️⃣  Start new checkout */
   const startCheckout = async (email: string) => {
     if (!stripePromise) return alert("Stripe not configured.");
     setLoading(true);
@@ -57,7 +64,6 @@ export const Navbar = ({
     await stripe?.redirectToCheckout({ sessionId: (data as { id: string }).id });
   };
 
-  /* 3️⃣  Main click handler */
   const handleManage = async () => {
     const email = localStorage.getItem("user_email");
     if (!email) {
@@ -80,66 +86,112 @@ export const Navbar = ({
     }
   };
 
-  /* ─── JSX ────────────────────────────────────────────────────── */
+  /* ─────────── JSX ─────────── */
   return (
     <>
       <nav className="sticky top-0 z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
         <div className="container mx-auto px-4 sm:p-6 lg:p-8 flex items-center justify-between">
           {/* Logo + title */}
-         <div className="flex justify-center sm:justify-start">
-            <div className="flex items-center space-x-3">
-              <div className="flex h-14 w-14 items-center justify-center rounded-lg">
-                <img
-                  src="Bill Market Logo - Alternate.png"
-                  className="h-full w-full object-contain"
-                  alt="Bill Market Logo"
-                />
-              </div>
-              <div>
-                <h1 className="text-2xl sm:text-xl font-bold text-foreground">
-                  Bill Market AI
-                </h1>
-                <p className="text-base sm:text-sm text-muted-foreground">
-                  Invest Like a Politician
-                </p>
-              </div>
+          <Link to="/" className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg">
+              <img
+                src="Bill Market Logo - Alternate.png"
+                className="h-full w-full object-contain"
+                alt="Bill Market Logo"
+              />
             </div>
-          </div>
+            <div>
+              <h1 className="text-xl font-bold text-foreground">Bill Market AI</h1>
+              <p className="text-xs text-muted-foreground">
+                Invest Like a Politician
+              </p>
+            </div>
+          </Link>
 
-          {/* Search (hidden on very small screens) */}
-          <div className="flex-1 mx-6 max-w-xl hidden sm:flex">
+          {/* Desktop actions */}
+          <div className="hidden sm:flex items-center gap-4 flex-1 justify-end">
+            {/* search */}
             <Input
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Search bills by title, sponsor, or topic…"
+              placeholder="Search bills…"
+              className="max-w-xs"
             />
-          </div>
 
-          {/* Right-side actions */}
-          <div className="flex items-center gap-3">
-            {/* Toggle filter on mobile */}
+            {/* filter toggle */}
             <button
               onClick={onFilterToggle}
-              className="sm:hidden p-2 rounded hover:bg-accent"
+              className="p-2 rounded hover:bg-blue-500"
             >
               <Filter className="w-5 h-5" />
             </button>
 
-            {/* Manage sub button */}
+            {/* manage subscription */}
             <Button onClick={handleManage} disabled={loading}>
               {loading ? "Loading…" : "Manage Subscription"}
             </Button>
           </div>
+
+          {/* Mobile menu toggle */}
+          <button
+            onClick={() => setMobileOpen(!mobileOpen)}
+            className="sm:hidden p-2 rounded hover:blue"
+          >
+            {mobileOpen ? (
+              <CloseIcon className="w-6 h-6" />
+            ) : (
+              <MenuIcon className="w-6 h-6" />
+            )}
+          </button>
         </div>
+
+        {/* Mobile collapsible panel */}
+        {mobileOpen && (
+          <div className="sm:hidden border-t bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
+            <div className="container mx-auto px-4 py-4 space-y-4">
+              {/* search */}
+              <div className="flex items-center gap-2">
+                <Search className="w-5 h-5 text-muted-foreground" />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  placeholder="Search bills…"
+                />
+              </div>
+
+              {/* filter */}
+              <Button
+                variant="secondary"
+                className="w-full flex items-center justify-center gap-2"
+                onClick={() => {
+                  setMobileOpen(false);
+                  onFilterToggle();
+                }}
+              >
+                <Filter className="w-4 h-4" />
+                Filters
+              </Button>
+
+              {/* manage subscription */}
+              <Button
+                onClick={handleManage}
+                disabled={loading}
+                className="w-full flex items-center justify-center"
+              >
+                {loading ? "…" : "Manage Subscription"}
+              </Button>
+            </div>
+          </div>
+        )}
       </nav>
 
-      {/* email prompt modal */}
+      {/* email prompt */}
       {showEmailPrompt && (
         <EmailPrompt
           onSubmit={async (email) => {
             localStorage.setItem("user_email", email);
             setShowEmailPrompt(false);
-            await handleManage(); // retry with email now stored
+            await handleManage();
           }}
         />
       )}
