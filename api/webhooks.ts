@@ -1,40 +1,47 @@
-// api/webhooks.ts
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-import Stripe from "https://esm.sh/stripe@12.3.0?target=deno";
+import Stripe from 'stripe';
 import getRawBody from 'raw-body';
 
-const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
-  apiVersion: "2023-10-16",
-});
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: any, res: any) {
+  // Health checks / your curl -I
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    return res.status(200).end('ok');
+  }
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return res.status(405).end('Method Not Allowed');
   }
 
-  let event: Stripe.Event;
-  const sig = req.headers['stripe-signature'] as string;
+  const secretKey = process.env.STRIPE_SECRET_KEY;
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-  try {
-    // IMPORTANT: use raw body, not parsed JSON
-    const rawBody = await getRawBody(req);
-    event = stripe.webhooks.constructEvent(rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET!);
-  } catch (err: any) {
-    return res.status(400).send(`Webhook Error: ${err.message}`);
+  if (!secretKey || !webhookSecret) {
+    console.error('Missing STRIPE env vars');
+    return res.status(500).send('Server misconfigured');
   }
 
-  // Handle events you care about
+  const stripe = new Stripe(secretKey, { apiVersion: '2025-07-30.basil' });
+
+  let event: Stripe.Event;
+  const sig = req.headers['stripe-signature'] as string | undefined;
+
+  try {
+    const rawBody = await getRawBody(req); // no body parsing middleware in Vercel functions
+    event = stripe.webhooks.constructEvent(rawBody, sig!, webhookSecret);
+  } catch (err: any) {
+    console.error('Webhook signature/body error:', err?.message);
+    return res.status(400).send(`Webhook Error: ${err?.message ?? 'Unknown'}`);
+  }
+
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
-        // TODO: fulfill order / mark subscription active, etc.
+        // TODO: fulfill subscription
         break;
       }
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object as Stripe.Invoice;
-        // TODO: update subscription state
+        // TODO: mark invoice/subscription paid
         break;
       }
       case 'customer.subscription.updated':
@@ -44,15 +51,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         break;
       }
       default:
-        // optionally log unhandled events
+        // Optionally log unhandled events
         break;
     }
   } catch (e) {
-    // If your own handler code throws, still return a 200 so Stripe doesn't endlessly retry
-    // but log it so you can fix the logic
+    // Your handler logic failed — log but still acknowledge so Stripe stops retrying
     console.error('Handler error:', e);
   }
 
-  // Acknowledge receipt
   return res.status(200).end();
 }
