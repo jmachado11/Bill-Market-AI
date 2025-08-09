@@ -52,7 +52,8 @@ serve(async (req) => {
 
     const BATCH_SIZE = 10;
     const processedLegiscanIds: number[] = [];
-
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0]; 
     // Process bills in batches of 10
     for (let i = 0; i < bills.length; i += BATCH_SIZE) {
       const batch = bills.slice(i, i + BATCH_SIZE);
@@ -67,6 +68,11 @@ const prompt = `
 Analyze these ${billsPayload.length} bills. Return ONLY a JSON array of objects (no markdown). Do not include any text before or after the array.
 
 You MUST include exactly 5 publicly traded U.S. stocks for each bill, even if the predicted impact is uncertain. Do not use "none", "neutral", or skip any. You must choose either "up" or "down" for each stock's predictedDirection based on the most likely directional effect, even if confidence is low.
+
+The "estimatedDecisionDate" MUST:
+- Be strictly later than ${todayStr}
+- Be within 1 year from today
+- Follow the format YYYY-MM-DD
 
 Each object must follow this exact structure:
 [
