@@ -136,7 +136,7 @@ export const Navbar = ({
             {/* filter toggle */}
             <button
               onClick={onFilterToggle}
-              className="p-2 rounded hover:bg-blue-500"
+              className="p-2 rounded hover:bg-blue-500 hover:text-white"
             >
               <Filter className="w-5 h-5" />
             </button>
@@ -153,7 +153,7 @@ export const Navbar = ({
                 <Button
                   variant="outline"
                   onClick={() => setAccountOpen((v) => !v)}
-                  className="min-w-[10rem] justify-between"
+                  className="min-w-[10rem] justify-between hover:bg-blue-500"
                 >
                   {userEmail}
                   <span className="ml-2">▾</span>
@@ -165,14 +165,14 @@ export const Navbar = ({
                   >
                     <button
                       onClick={handleManage}
-                      className="w-full text-left px-4 py-2 hover:bg-accent rounded-t-md disabled:opacity-60"
+                      className="w-full text-left px-4 py-2 hover:bg-blue-500 hover:text-white rounded-t-md disabled:opacity-60"
                       disabled={loading}
                     >
                       {loading ? "Opening…" : "Manage subscription"}
                     </button>
                     <button
                       onClick={handleSignOut}
-                      className="w-full text-left px-4 py-2 hover:bg-accent rounded-b-md"
+                      className="w-full text-left px-4 py-2 hover:bg-blue-500 hover:text-white rounded-b-md"
                     >
                       Sign out
                     </button>
