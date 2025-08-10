@@ -14,37 +14,71 @@ const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY!);
 
 const Index = () => {
   /* ──────────────── UI + data state ──────────────── */
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("recent");
   const [filterBy, setFilterBy] = useState<FilterOption>("all");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  const [bills,    setBills]    = useState<Bill[]>([]);
+  const [bills, setBills] = useState<Bill[]>([]);
   const [selected, setSelected] = useState<Bill | null>(null);
 
-  const [loading, setLoading]     = useState(true);
-  const [error,   setError]       = useState<string | null>(null);
-  const [pro,     setPro]         = useState(false);
-  const [askMail, setAskMail]     = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [pro, setPro] = useState(false);
+  const [askMail, setAskMail] = useState(false);
 
-  /* ────────── initial subscription check ─────────── */
+  /* ────────── initial subscription check (Supabase Auth + guard) ─────────── */
   useEffect(() => {
-    const run = async () => {
-      const email = localStorage.getItem("user_email");
-      if (!email) return;
+    let cancelled = false;
 
+    const sync = async () => {
       try {
-        const { data, error } = await supabase.functions.invoke(
-          "check-subscription",
-          { body: { email } }
-        );
-        if (error) throw error;
-        setPro((data as any)?.is_subscribed);
+        const { data: { session }, error: sessErr } = await supabase.auth.getSession();
+        if (sessErr) console.error("getSession error:", sessErr);
+
+        const email = session?.user?.email ?? null;
+        const uid = session?.user?.id ?? null;
+
+        if (!cancelled) {
+          setUserEmail(email);
+          setUserId(uid);
+        }
+
+        if (!email) {
+          if (!cancelled) setPro(false);
+          return; // don't call the function without an email
+        }
+
+        const { data, error } = await supabase.functions.invoke("check-subscription", {
+          body: { email },
+          headers: { "Content-Type": "application/json" },
+        });
+
+        if (error) {
+          console.error("check-subscription error:", error);
+          if (!cancelled) setPro(false);
+          return;
+        }
+
+        if (!cancelled) setPro((data as any)?.is_subscribed);
       } catch (e) {
         console.error("Subscription check failed:", e);
+        if (!cancelled) setPro(false);
       }
     };
-    run();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      sync();
+    });
+
+    sync();
+
+    return () => {
+      cancelled = true;
+      subscription?.unsubscribe();
+    };
   }, []);
 
   /* ───────────── fetch bills on load ─────────────── */
@@ -81,9 +115,9 @@ const Index = () => {
 
     if (filterBy !== "all") {
       out = out.filter((b) => {
-        if (filterBy === "high-likelihood")   return b.passingLikelihood >= 0.7;
+        if (filterBy === "high-likelihood") return b.passingLikelihood >= 0.7;
         if (filterBy === "medium-likelihood") return b.passingLikelihood >= 0.4 && b.passingLikelihood < 0.7;
-        if (filterBy === "low-likelihood")    return b.passingLikelihood < 0.4;
+        if (filterBy === "low-likelihood") return b.passingLikelihood < 0.4;
         return true;
       });
     }
@@ -100,10 +134,10 @@ const Index = () => {
   }, [bills, searchQuery, sortBy, filterBy]);
 
   /* ─────────────── Stripe helpers ──────────────── */
-  const checkout = async (email: string) => {
+  const checkout = async (email: string, uid: string | null) => {
     const { data, error } = await supabase.functions.invoke(
       "create-checkout-session",
-      { body: { email } }
+      { body: { email, user_id: uid } }
     );
     if (error) throw error;
 
@@ -112,17 +146,18 @@ const Index = () => {
   };
 
   const handleSubscribe = async () => {
-    const email = localStorage.getItem("user_email");
+    const email = userEmail;
+    const uid = userId;
+
     if (!email) return setAskMail(true);
 
-    const { data, error } = await supabase.functions.invoke(
-      "check-subscription",
-      { body: { email } }
-    );
+    const { data, error } = await supabase.functions.invoke("check-subscription", {
+      body: { email },
+    });
     if (error) return console.error(error);
 
     if ((data as any).is_subscribed) setPro(true);
-    else await checkout(email);
+    else await checkout(email, uid);
   };
 
   /* ─────────────────── JSX ─────────────────── */
@@ -215,14 +250,15 @@ const Index = () => {
 
       {/* Mobile filter drawer */}
       <div className="lg:hidden">
-      <FilterSidebar
-        isOpen={isFilterOpen}
-        onClose={() => setIsFilterOpen(false)}
-        sortBy={sortBy}
-        onSortChange={setSortBy}
-        filterBy={filterBy}
-        onFilterChange={setFilterBy}
-      /></div>
+        <FilterSidebar
+          isOpen={isFilterOpen}
+          onClose={() => setIsFilterOpen(false)}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+          filterBy={filterBy}
+          onFilterChange={setFilterBy}
+        />
+      </div>
 
       {/* Bill details drawer */}
       <BillDetails
@@ -231,17 +267,17 @@ const Index = () => {
         onClose={() => setSelected(null)}
       />
 
-      {/* Email prompt */}
+      {/* Email+Password auth modal */}
       {askMail && (
         <EmailPrompt
-          onSubmit={async (email) => {
-            localStorage.setItem("user_email", email);
+          onAuthSuccess={async () => {
             setAskMail(false);
             await handleSubscribe();
           }}
+          onClose={() => setAskMail(false)}
         />
       )}
-</div>
+    </div>
   );
 };
 

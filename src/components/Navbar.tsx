@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Menu as MenuIcon,
@@ -38,7 +38,15 @@ export const Navbar = ({
   const [showEmailPrompt, setShowEmailPrompt] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  /* ─────────── Stripe helpers ─────────── */
+  // "Signed in" = we have an email in localStorage (same as before)
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
+
+  useEffect(() => {
+    setUserEmail(localStorage.getItem("user_email"));
+  }, []);
+
+  /* ─────────── Stripe helpers (EXACT same behavior as before) ─────────── */
   const openPortal = async (email: string) => {
     setLoading(true);
     const { data, error } = await supabase.functions.invoke(
@@ -55,7 +63,7 @@ export const Navbar = ({
     setLoading(true);
     const { data, error } = await supabase.functions.invoke(
       "create-checkout-session",
-      { body: { email } }
+      { body: { email } } // ← unchanged
     );
     setLoading(false);
     if (error) return alert(error.message);
@@ -86,7 +94,14 @@ export const Navbar = ({
     }
   };
 
-  /* ─────────── JSX ─────────── */
+  const handleSignOut = async () => {
+    // This is not Supabase Auth sign-out; we’re using the old email flow.
+    localStorage.removeItem("user_email");
+    setUserEmail(null);
+    setAccountOpen(false);
+  };
+
+  /* ─────────── JSX (same UI + style) ─────────── */
   return (
     <>
       <nav className="sticky top-0 z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
@@ -121,15 +136,50 @@ export const Navbar = ({
             {/* filter toggle */}
             <button
               onClick={onFilterToggle}
-              className="p-2 rounded hover:bg-blue-500"
+              className="p-2 rounded hover:bg-blue-500 hover:text-white"
             >
               <Filter className="w-5 h-5" />
             </button>
 
-            {/* manage subscription */}
-            <Button onClick={handleManage} disabled={loading}>
-              {loading ? "Loading…" : "Manage Subscription"}
-            </Button>
+            {/* account / manage */}
+            {!userEmail ? (
+              // not "signed in": show sign in/up (opens the same EmailPrompt as before)
+              <Button onClick={() => setShowEmailPrompt(true)} disabled={loading}>
+                {loading ? "Loading…" : "Sign in / Sign up"}
+              </Button>
+            ) : (
+              // "signed in": show email button with a tiny dropdown (Manage + Sign out)
+              <div className="relative">
+                <Button
+                  variant="outline"
+                  onClick={() => setAccountOpen((v) => !v)}
+                  className="min-w-[10rem] justify-between hover:bg-blue-500"
+                >
+                  {userEmail}
+                  <span className="ml-2">▾</span>
+                </Button>
+                {accountOpen && (
+                  <div
+                    className="absolute right-0 mt-2 w-56 rounded-md border bg-popover shadow-lg"
+                    onMouseLeave={() => setAccountOpen(false)}
+                  >
+                    <button
+                      onClick={handleManage}
+                      className="w-full text-left px-4 py-2 hover:bg-blue-500 hover:text-white rounded-t-md disabled:opacity-60"
+                      disabled={loading}
+                    >
+                      {loading ? "Opening…" : "Manage subscription"}
+                    </button>
+                    <button
+                      onClick={handleSignOut}
+                      className="w-full text-left px-4 py-2 hover:bg-blue-500 hover:text-white rounded-b-md"
+                    >
+                      Sign out
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Mobile menu toggle */}
@@ -172,27 +222,52 @@ export const Navbar = ({
                 Filters
               </Button>
 
-              {/* manage subscription */}
-              <Button
-                onClick={handleManage}
-                disabled={loading}
-                className="w-full flex items-center justify-center"
-              >
-                {loading ? "…" : "Manage Subscription"}
-              </Button>
+              {/* account / manage on mobile */}
+              {!userEmail ? (
+                <Button
+                  onClick={() => setShowEmailPrompt(true)}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center"
+                >
+                  {loading ? "…" : "Sign in / Sign up"}
+                </Button>
+              ) : (
+                <div className="space-y-2">
+                  <div className="text-sm text-muted-foreground px-1">
+                    Signed in as <span className="font-medium">{userEmail}</span>
+                  </div>
+                  <Button
+                    onClick={handleManage}
+                    disabled={loading}
+                    className="w-full flex items-center justify-center"
+                  >
+                    {loading ? "…" : "Manage subscription"}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={handleSignOut}
+                    className="w-full flex items-center justify-center"
+                  >
+                    Sign out
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         )}
       </nav>
 
-      {/* email prompt */}
+      {/* Email prompt (same contract as your original: returns an email string) */}
       {showEmailPrompt && (
         <EmailPrompt
-          onSubmit={async (email) => {
-            localStorage.setItem("user_email", email);
+          onAuthSuccess={async (email) => {
+            localStorage.setItem("user_email", email); // ← same behavior as before
+            setUserEmail(email);
             setShowEmailPrompt(false);
-            await handleManage();
+            // (optional) jump straight to manage flow after "sign in"
+            // await handleManage();
           }}
+          onClose={() => setShowEmailPrompt(false)}
         />
       )}
     </>

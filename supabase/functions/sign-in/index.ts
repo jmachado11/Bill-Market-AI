@@ -4,7 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_KEY")!
+  Deno.env.get("SUPABASE_KEY")! // anon key
 );
 
 serve(async (req) => {
@@ -12,50 +12,21 @@ serve(async (req) => {
     const { email, password } = await req.json();
 
     if (!email || !password) {
-      return new Response(
-        JSON.stringify({ error: "Email and password required" }),
-        { status: 400 }
-      );
+      return new Response(JSON.stringify({ error: "Email and password required" }), { status: 400 });
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 400,
-      });
+      return new Response(JSON.stringify({ error: error.message }), { status: 400 });
     }
     if (!data.session || !data.user) {
-      return new Response(JSON.stringify({ error: "Login failed" }), {
-        status: 500,
-      });
+      return new Response(JSON.stringify({ error: "Login failed" }), { status: 500 });
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", data.user.id)
-      .single();
-
-    if (profileError) {
-      return new Response(JSON.stringify({ error: profileError.message }), {
-        status: 500,
-      });
-    }
-
-    return new Response(
-      JSON.stringify({
-        session: data.session,
-        user: { ...data.user, ...(profile ?? {}) },
-      }),
-      {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+    return new Response(JSON.stringify({ session: data.session, user: data.user }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
   return new Response("Not Found", { status: 404 });

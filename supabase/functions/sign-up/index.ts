@@ -4,43 +4,26 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_KEY")!
+  Deno.env.get("SUPABASE_KEY")! // anon key
 );
 
 serve(async (req) => {
   if (req.method === "POST" && new URL(req.url).pathname === "/signup") {
     const { email, password } = await req.json();
 
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (!email || !password) {
+      return new Response(JSON.stringify({ error: "Email and password required" }), { status: 400 });
+    }
 
+    const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) {
-      return new Response(JSON.stringify({ error: error.message }), {
-        status: 400,
-      });
+      return new Response(JSON.stringify({ error: error.message }), { status: 400 });
     }
     if (!data.user) {
-      return new Response(
-        JSON.stringify({ error: "Signup failed, no user returned" }),
-        { status: 500 }
-      );
+      return new Response(JSON.stringify({ error: "Signup failed, no user returned" }), { status: 500 });
     }
-    const { data: insertedProfile, error: profileError } = await supabase
-      .from("profiles")
-      .insert({ id: data.user.id, subscribed: false })
-      .select()
-      .single();
 
-    if (profileError)
-      return new Response(JSON.stringify({ error: profileError.message }), {
-        status: 500,
-      });
-
-    return new Response(
-      JSON.stringify({ user: { ...data.user, ...(insertedProfile ?? {}) } }),
-      {
-        status: 200,
-      }
-    );
+    return new Response(JSON.stringify({ user: data.user }), { status: 200 });
   }
 
   return new Response("Not Found", { status: 404 });
