@@ -2,16 +2,22 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import Stripe from "https://esm.sh/stripe@12.3.0?target=deno";
 
-/* ─── clients ─────────────────────────────────────────────────────────── */
-const supabase = createClient(
+/** Use SERVICE ROLE for DB reads/writes to subscriptions */
+const supabaseAdmin = createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
 );
+
+/** Use ANON client only to read the user from the JWT when needed */
+const supabaseAnon = createClient(
+  Deno.env.get("SUPABASE_URL")!,
+  Deno.env.get("SUPABASE_KEY")!
+);
+
 const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY")!, {
   apiVersion: "2023-10-16",
 });
 
-/* ─── CORS helper (same as before) ─────────────────────────────────────── */
 const cors = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -19,51 +25,72 @@ const cors = {
   "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
 };
 
-/* ─── handler ──────────────────────────────────────────────────────────── */
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
-  /* email can come from query or POST body */
-  const urlEmail = new URL(req.url).searchParams.get("email");
-  const bodyEmail = (await req.json().catch(() => ({}))).email;
-  const email = bodyEmail ?? urlEmail;
-  if (!email)
-    return new Response(JSON.stringify({ error: "Missing email" }), {
-      status: 400,
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
+  try {
+    const urlEmail = new URL(req.url).searchParams.get("email") ?? undefined;
+    const body = await req.json().catch(() => ({} as any));
+    const bodyEmail = (body?.email as string | undefined) ?? undefined;
 
-  /* 1️⃣  look in our own DB first */
-  const { data } = await supabase
-    .from("subscriptions")
-    .select("is_subscribed")
-    .eq("email", email)
-    .single();
+    // 1) Prefer explicit email in body/query
+    let email = bodyEmail ?? urlEmail;
 
-  if (data) {
-    return new Response(JSON.stringify({ is_subscribed: data.is_subscribed }), {
-      headers: { ...cors, "Content-Type": "application/json" },
-    });
-  }
+    // 2) If not provided, try to derive from Supabase Auth JWT
+    if (!email) {
+      const auth = req.headers.get("authorization") || req.headers.get("Authorization");
+      const token = auth?.startsWith("Bearer ") ? auth.slice(7) : undefined;
+      if (token) {
+        const { data, error } = await supabaseAnon.auth.getUser(token);
+        if (!error) email = data.user?.email ?? undefined;
+      }
+    }
 
-  /* 2️⃣  lazy back-fill: ask Stripe only if we didn't find a row */
-  const active = await isActiveInStripe(email);
-  if (active) {
-    await supabase
+    // 3) If we STILL don’t have an email, return a safe false (no 400s in the UI)
+    if (!email) {
+      return new Response(JSON.stringify({ is_subscribed: false }), {
+        status: 200,
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+
+    // 4) Try cached status in subscriptions
+    const { data: subRow, error: subErr } = await supabaseAdmin
       .from("subscriptions")
-      .upsert({ email, is_subscribed: true }, { onConflict: "email" });
-  }
+      .select("is_subscribed")
+      .eq("email", email)
+      .maybeSingle();
+    if (subErr) console.error("subscriptions select error:", subErr);
 
-  return new Response(JSON.stringify({ is_subscribed: active }), {
-    headers: { ...cors, "Content-Type": "application/json" },
-  });
+    if (subRow?.is_subscribed !== undefined && subRow?.is_subscribed !== null) {
+      return new Response(JSON.stringify({ is_subscribed: !!subRow.is_subscribed }), {
+        headers: { ...cors, "Content-Type": "application/json" },
+      });
+    }
+
+    // 5) Not cached → check Stripe and backfill subscriptions
+    const active = await isActiveInStripe(email);
+
+    const { error: upErr } = await supabaseAdmin
+      .from("subscriptions")
+      .upsert({ email, is_subscribed: active }, { onConflict: "email" });
+    if (upErr) console.error("subscriptions upsert error:", upErr);
+
+    return new Response(JSON.stringify({ is_subscribed: active }), {
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  } catch (e) {
+    console.error("check-subscription fatal:", e);
+    return new Response(JSON.stringify({ is_subscribed: false }), {
+      status: 200,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
 });
 
-/* util --------------------------------------------------- */
 async function isActiveInStripe(email: string): Promise<boolean> {
   const customer = (await stripe.customers.list({ email, limit: 1 })).data[0];
   if (!customer) return false;
-
   const subs = await stripe.subscriptions.list({
     customer: customer.id,
     status: "active",

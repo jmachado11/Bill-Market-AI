@@ -8,15 +8,19 @@ const CheckoutSuccess = () => {
 
   useEffect(() => {
     const params = new URLSearchParams(search);
-    const email = params.get("email");
+    const urlEmail = params.get("email");
 
-    // persist email locally so the rest of the app can pick it up
-    if (email) localStorage.setItem("user_email", email);
-
-    // optional: ping Edge Function to verify subscription immediately
-    if (email) {
-      supabase.functions.invoke("check-subscription", { body: { email } });
-    }
+    (async () => {
+      // Prefer the authed user’s email; fall back to URL param if necessary
+      const { data: sessionRes } = await supabase.auth.getSession();
+      const email = sessionRes.session?.user?.email ?? urlEmail;
+      if (email) {
+        // Warm subscription status so the UI flips to Pro immediately
+        await supabase.functions.invoke("check-subscription", {
+          body: { email },
+        });
+      }
+    })();
   }, [search]);
 
   return (
