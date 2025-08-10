@@ -24,16 +24,23 @@ serve(async (req) => {
         { status: 500 }
       );
     }
-    const { error: profileError } = await supabase
+    const { data: insertedProfile, error: profileError } = await supabase
       .from("profiles")
-      .insert({ id: data.user.id, subscribed: false });
+      .insert({ id: data.user.id, subscribed: false })
+      .select()
+      .single();
 
     if (profileError)
       return new Response(JSON.stringify({ error: profileError.message }), {
         status: 500,
       });
 
-    return new Response(JSON.stringify({ user: data.user }), { status: 200 });
+    return new Response(
+      JSON.stringify({ user: { ...data.user, ...(insertedProfile ?? {}) } }),
+      {
+        status: 200,
+      }
+    );
   }
 
   return new Response("Not Found", { status: 404 });
