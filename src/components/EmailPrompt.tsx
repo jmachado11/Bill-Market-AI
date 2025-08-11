@@ -18,11 +18,18 @@ export function EmailPrompt({ onAuthSuccess, onClose }: Props) {
     setLoading(true);
     try {
       if (mode === "signup") {
-        const { data, error } = await supabase.auth.signUp({ email, password });
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: "https://billmarketai.com" },
+        });
         if (error) throw error;
         if (!data.user) throw new Error("Signup failed: no user returned");
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
         if (error) throw error;
       }
       onAuthSuccess(email);
@@ -39,13 +46,17 @@ export function EmailPrompt({ onAuthSuccess, onClose }: Props) {
       <div className="w-full max-w-sm rounded-xl bg-card p-6 shadow-xl">
         <div className="flex gap-2 mb-4">
           <button
-            className={`flex-1 py-2 rounded-md ${mode === "signin" ? "bg-primary text-white" : "bg-muted"}`}
+            className={`flex-1 py-2 rounded-md ${
+              mode === "signin" ? "bg-primary text-white" : "bg-muted"
+            }`}
             onClick={() => setMode("signin")}
           >
             Sign in
           </button>
           <button
-            className={`flex-1 py-2 rounded-md ${mode === "signup" ? "bg-primary text-white" : "bg-muted"}`}
+            className={`flex-1 py-2 rounded-md ${
+              mode === "signup" ? "bg-primary text-white" : "bg-muted"
+            }`}
             onClick={() => setMode("signup")}
           >
             Sign up
@@ -77,10 +88,17 @@ export function EmailPrompt({ onAuthSuccess, onClose }: Props) {
           disabled={loading || !email || !password}
           className="w-full py-2 rounded-md bg-primary text-white hover:bg-primary/90 disabled:opacity-60"
         >
-          {loading ? "Please wait…" : mode === "signup" ? "Create account" : "Sign in"}
+          {loading
+            ? "Please wait…"
+            : mode === "signup"
+            ? "Create account"
+            : "Sign in"}
         </button>
 
-        <button className="mt-3 w-full py-2 rounded-md bg-muted" onClick={onClose}>
+        <button
+          className="mt-3 w-full py-2 rounded-md bg-muted"
+          onClick={onClose}
+        >
           Cancel
         </button>
       </div>
