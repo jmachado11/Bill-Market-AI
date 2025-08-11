@@ -12,7 +12,7 @@ export function EmailPrompt({ onAuthSuccess, onClose }: Props) {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-
+  console.log("update");
   const submit = async () => {
     setErr(null);
     setLoading(true);
