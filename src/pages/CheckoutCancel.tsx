@@ -7,7 +7,7 @@ const CheckoutCancel = () => {
       <h1 className="text-3xl font-bold mb-4">Payment cancelled</h1>
       <p className="mb-8">No worries—your card was not charged.</p>
       <button
-        onClick={() => navigate("/")}
+        onClick={() => navigate("/app")}
         className="px-6 py-3 bg-secondary rounded-lg hover:bg-secondary/90"
       >
         Return to site

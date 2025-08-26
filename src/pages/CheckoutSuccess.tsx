@@ -28,7 +28,7 @@ const CheckoutSuccess = () => {
       <h1 className="text-3xl font-bold mb-4">🎉 Payment successful!</h1>
       <p className="mb-8">You now have full access to every bill.</p>
       <button
-        onClick={() => navigate("/")}
+        onClick={() => navigate("/app")}
         className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90"
       >
         Go back to Bills

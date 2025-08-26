@@ -107,7 +107,7 @@ export const Navbar = ({
       <nav className="sticky top-0 z-50 w-full border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60">
         <div className="container mx-auto px-3 sm:p-6 lg:p-6 flex items-center justify-between">
           {/* Logo + title */}
-          <Link to="/" className="flex items-center gap-3">
+          <Link to="/app" className="flex items-center gap-3">
             <div className="h-12 w-12 rounded-lg">
               <img
                 src="Bill Market Logo - Alternate.png"
