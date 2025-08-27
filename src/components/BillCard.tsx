@@ -127,11 +127,17 @@ export const BillCard = ({ bill, onViewDetails }: BillCardProps) => {
             View Details
           </Button>
           {bill.documentUrl && (
-            <Button variant="outline" size="sm" className="w-full sm:w-auto" asChild>
-              <a href={bill.documentUrl} target="_blank" rel="noopener noreferrer">
+            bill.documentUrl === '#' ? (
+              <Button variant="outline" size="sm" className="w-full sm:w-auto opacity-50 cursor-not-allowed">
                 <ExternalLink className="h-4 w-4" />
-              </a>
-            </Button>
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" className="w-full sm:w-auto" asChild>
+                <a href={bill.documentUrl} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              </Button>
+            )
           )}
         </div>
       </CardContent>

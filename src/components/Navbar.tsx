@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Menu as MenuIcon,
   X as CloseIcon,
@@ -21,7 +21,7 @@ const pk =
   import.meta.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 const stripePromise = pk ? loadStripe(pk) : null;
 
-/* ─── props ────────────────────────────────────────────────────── */
+/* ─── props ────���───────────────────────────────────────────────── */
 interface Props {
   searchQuery: string;
   onSearchChange: (q: string) => void;
@@ -34,6 +34,7 @@ export const Navbar = ({
   onSearchChange,
   onFilterToggle,
 }: Props) => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [showEmailPrompt, setShowEmailPrompt] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -99,6 +100,7 @@ export const Navbar = ({
     localStorage.removeItem("user_email");
     setUserEmail(null);
     setAccountOpen(false);
+    navigate("/"); // Navigate to landing page
   };
 
   /* ─────────── JSX (same UI + style) ─────────── */

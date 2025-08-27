@@ -1,18 +1,135 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
 import { Zap, TrendingUp, Shield, Activity, FileText, Brain, Target, Bell, Check, Star } from "lucide-react";
+import { BillCard } from "@/components/BillCard";
+import { BillDetails } from "@/components/BillDetails";
+import { EmailPrompt } from "@/components/EmailPrompt";
+import { Bill } from "@/types/bill";
+import { supabase } from "@/integrations/supabase/client";
+import { loadStripe } from "@stripe/stripe-js";
+
+const pk = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || import.meta.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+const stripePromise = pk ? loadStripe(pk) : null;
 
 export default function Landing() {
+  const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
+  const [isBillDetailsOpen, setIsBillDetailsOpen] = useState(false);
+  const [showEmailPrompt, setShowEmailPrompt] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleViewDetails = (bill: Bill) => {
+    setSelectedBill(bill);
+    setIsBillDetailsOpen(true);
+  };
+
+  const handleCloseBillDetails = () => {
+    setIsBillDetailsOpen(false);
+    setSelectedBill(null);
+  };
+
+  const openPortal = async (email: string) => {
+    setLoading(true);
+    const { data, error } = await supabase.functions.invoke(
+      "create-portal-session",
+      { body: { email } }
+    );
+    setLoading(false);
+    if (error) return alert(error.message);
+    window.location.href = (data as { url: string }).url;
+  };
+
+  const startCheckout = async (email: string) => {
+    if (!stripePromise) return alert("Stripe not configured.");
+    setLoading(true);
+    const { data, error } = await supabase.functions.invoke(
+      "create-checkout-session",
+      { body: { email } }
+    );
+    setLoading(false);
+    if (error) return alert(error.message);
+
+    const stripe = await stripePromise;
+    await stripe?.redirectToCheckout({ sessionId: (data as { id: string }).id });
+  };
+
+  const handleSignInOrTrial = async () => {
+    setShowEmailPrompt(true);
+  };
+
+  const handleAuthSuccess = async (email: string) => {
+    localStorage.setItem("user_email", email);
+    setShowEmailPrompt(false);
+
+    setLoading(true);
+    const { data, error } = await supabase.functions.invoke(
+      "check-subscription",
+      { body: { email } }
+    );
+    setLoading(false);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    if ((data as any).is_subscribed) {
+      // User has a subscription, navigate to app
+      navigate('/app');
+    } else {
+      // User doesn't have subscription, start checkout
+      await startCheckout(email);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#fefefe]">
+      {/* Navigation */}
+      <nav className="sticky top-0 z-50 w-full border-b border-black/10 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/60 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            {/* Logo */}
+            <Link to="/" className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-lg">
+                <img
+                  src="Bill Market Logo - Alternate.png"
+                  className="h-full w-full object-contain"
+                  alt="Bill Market Logo"
+                />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-foreground">Bill Market AI</h1>
+                <p className="text-xs text-muted-foreground">
+                  Invest Like a Politician
+                </p>
+              </div>
+            </Link>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleSignInOrTrial}
+                disabled={loading}
+                className="px-6 py-2 text-black font-medium hover:text-[#487ef4] transition-colors disabled:opacity-50"
+              >
+                {loading ? "Loading..." : "Sign in"}
+              </button>
+              <button
+                onClick={handleSignInOrTrial}
+                disabled={loading}
+                className="px-6 py-2 bg-[#487ef4] text-white font-semibold rounded-lg hover:bg-[#487ef4]/90 transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                {loading ? "Loading..." : "Start Free Trial"}
+                <Zap className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </nav>
       {/* Hero Section */}
       <section className="px-4 py-16 md:py-24 max-w-7xl mx-auto">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           <div className="space-y-8">
-            <div className="flex items-center gap-3">
-              <Zap className="w-6 h-6 text-[#487ef4]" />
-              <span className="text-xl font-semibold text-[#487ef4]">Bill market</span>
-            </div>
-            
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight">
               Giving you the same insights{" "}
               <span className="text-[#487ef4]">they have</span>
@@ -23,15 +140,20 @@ export default function Landing() {
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4">
-              <Link
-                to="/app"
-                className="px-8 py-4 bg-[#487ef4] text-white font-semibold rounded-lg hover:bg-[#487ef4]/90 transition-colors inline-flex items-center justify-center gap-2"
+              <button
+                onClick={handleSignInOrTrial}
+                disabled={loading}
+                className="px-8 py-4 bg-[#487ef4] text-white font-semibold rounded-lg hover:bg-[#487ef4]/90 transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                Start Free Trial
+                {loading ? "Loading..." : "Start Free Trial"}
                 <Zap className="w-4 h-4" />
-              </Link>
-              <button className="px-8 py-4 border border-black/20 text-black font-semibold rounded-lg hover:bg-black/5 transition-colors">
-                View demo
+              </button>
+              <button
+                onClick={handleSignInOrTrial}
+                disabled={loading}
+                className="px-8 py-4 border border-black/20 text-black font-semibold rounded-lg hover:bg-black/5 transition-colors inline-flex items-center justify-center disabled:opacity-50"
+              >
+                {loading ? "Loading..." : "Sign in"}
               </button>
             </div>
             
@@ -46,8 +168,8 @@ export default function Landing() {
                   <div className="text-sm text-black/70">Bills analyzed</div>
                 </div>
                 <div>
-                  <div className="text-2xl md:text-3xl font-bold text-[#487ef4]">$2.1M+</div>
-                  <div className="text-sm text-black/70">Saved for users</div>
+                  <div className="text-2xl md:text-3xl font-bold text-[#487ef4]">2300+</div>
+                  <div className="text-sm text-black/70">Companies Mapped</div>
                 </div>
               </div>
             </div>
@@ -181,7 +303,7 @@ export default function Landing() {
         </div>
         
         {/* Understanding Predictions */}
-        <div className="bg-white rounded-2xl border border-black/20 p-8 md:p-12 shadow-lg shadow-[#487ef4]/20">
+        <div className="bg-white rounded-2xl border border-black/20 p-8 md:p-12 shadow-2xl shadow-[#487ef4]/30">
           <div className="grid lg:grid-cols-2 gap-12">
             <div>
               <h3 className="text-2xl md:text-3xl font-semibold mb-8">Understanding our Predictions</h3>
@@ -208,7 +330,7 @@ export default function Landing() {
                   <div>
                     <h4 className="text-lg font-semibold mb-1">Affected stocks</h4>
                     <p className="text-black/50">
-                      Shows a list of stocks that are going to be affected by the proposed bill as well as predictions about the stock
+                      Shows a list of stocks that are going to be affected by the proposed bill
                     </p>
                   </div>
                 </div>
@@ -216,14 +338,75 @@ export default function Landing() {
             </div>
             
             <div className="flex items-center justify-center">
-              <div className="text-center">
-                <h4 className="text-lg font-semibold text-black/70 mb-8">Example prediction</h4>
-                <div className="text-lg font-semibold">Place example bill from main website</div>
+              <div className="w-full max-w-2xl">
+                <h4 className="text-lg font-semibold text-black/70 mb-6 text-center">Example prediction</h4>
+                <div className="transform scale-90 sm:scale-95 shadow-xl shadow-[#487ef4]/25 rounded-2xl">
+                  <BillCard
+                    bill={{
+                      id: 'example-1',
+                      title: 'Artificial Intelligence Research and Development Act',
+                      description: 'Establishes national AI research initiatives and provides funding for AI safety research at universities and private institutions.',
+                      sponsor: {
+                        name: 'Rep. David Park',
+                        party: 'D',
+                        state: 'WA'
+                      },
+                      introducedDate: '2024-02-01',
+                      lastAction: 'Introduced in House',
+                      lastActionDate: '2024-02-01',
+                      estimatedDecisionDate: '2024-05-15',
+                      passingLikelihood: 0.72,
+                      status: 'committee',
+                      chamber: 'house',
+                      affectedStocks: [
+                        {
+                          symbol: 'NVDA',
+                          companyName: 'NVIDIA Corporation',
+                          predictedDirection: 'up',
+                          confidence: 0.89,
+                          reasoning: 'Increased AI research funding would drive demand for high-performance computing chips.'
+                        },
+                        {
+                          symbol: 'GOOGL',
+                          companyName: 'Alphabet Inc.',
+                          predictedDirection: 'up',
+                          confidence: 0.83,
+                          reasoning: 'Government AI initiatives could benefit leading AI research companies through partnerships.'
+                        },
+                        {
+                          symbol: 'MSFT',
+                          companyName: 'Microsoft Corporation',
+                          predictedDirection: 'up',
+                          confidence: 0.87,
+                          reasoning: 'Cloud computing and AI platform demand would increase with expanded research initiatives.'
+                        }
+                      ],
+                      affectedStocksId: ['nvda', 'googl', 'msft'],
+                      documentUrl: '#'
+                    }}
+                    onViewDetails={handleViewDetails}
+                  />
+                </div>
               </div>
             </div>
           </div>
         </div>
       </section>
+
+      {/* Bill Details Dialog */}
+      <BillDetails
+        bill={selectedBill}
+        isOpen={isBillDetailsOpen}
+        onClose={handleCloseBillDetails}
+      />
+
+      {/* Email Prompt */}
+      {showEmailPrompt && (
+        <EmailPrompt
+          onAuthSuccess={handleAuthSuccess}
+          onClose={() => setShowEmailPrompt(false)}
+        />
+      )}
 
       {/* Testimonials */}
       <section className="px-4 py-16 md:py-24 max-w-7xl mx-auto">
@@ -264,150 +447,76 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Pricing */}
+      {/* Free Trial Section */}
       <section className="px-4 py-16 md:py-24 max-w-7xl mx-auto">
         <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6">Choose Your Plan</h2>
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6">Start Your Free Trial</h2>
           <p className="text-xl md:text-2xl text-black/60">
-            Start with our 14-day free trial. No credit card required. Cancel anytime.
+            30-day free trial, then $9.99/month. No credit card required. Cancel anytime.
           </p>
         </div>
-        
-        <div className="grid lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
-          {/* Starter Plan */}
-          <div className="bg-white rounded-2xl border border-black/20 p-8 shadow-lg shadow-[#487ef4]/25">
-            <h3 className="text-2xl md:text-3xl font-bold text-center mb-2">Starter</h3>
-            <p className="text-black/50 text-center mb-6">Perfect for individual investors</p>
-            
-            <div className="text-center mb-8">
-              <span className="text-4xl font-bold">$0</span>
-              <span className="text-black/50">/month</span>
-            </div>
-            
-            <div className="space-y-4 mb-8">
-              <div className="flex items-center gap-3">
-                <Check className="w-5 h-5 text-[#487ef4]" />
-                <span>5 predictions available</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Check className="w-5 h-5 text-[#487ef4]" />
-                <span>Basic bill analysis</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Check className="w-5 h-5 text-[#487ef4]" />
-                <span>Email alerts</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Check className="w-5 h-5 text-[#487ef4]" />
-                <span>Access to basic features</span>
-              </div>
-            </div>
-            
-            <button className="w-full py-3 border border-black/20 text-black font-semibold rounded-lg hover:bg-black/5 transition-colors">
-              Start free trial
-            </button>
-          </div>
-          
-          {/* Professional Plan */}
-          <div className="relative bg-white rounded-2xl border-2 border-[#487ef4] p-8 shadow-lg shadow-[#487ef4]/25 scale-105">
-            <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-              <div className="bg-[#487ef4] text-white px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-2">
+
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white rounded-2xl border-2 border-[#487ef4] p-8 md:p-12 shadow-lg shadow-[#487ef4]/25 text-center">
+            <div className="mb-8">
+              <div className="bg-[#487ef4] text-white px-4 py-2 rounded-full text-sm font-semibold inline-flex items-center gap-2 mb-6">
                 <Star className="w-4 h-4" />
-                Most popular
+                30-Day Free Trial
               </div>
+
+              <div className="text-6xl font-bold mb-4">
+                <span className="text-[#487ef4]">Free</span>
+              </div>
+              <p className="text-xl text-black/60 mb-2">for 30 days</p>
+              <p className="text-lg text-black/50">then $9.99/month</p>
             </div>
-            
-            <h3 className="text-2xl md:text-3xl font-bold text-center mb-2 mt-4">Professional</h3>
-            <p className="text-black/50 text-center mb-6">Best for active traders</p>
-            
-            <div className="text-center mb-8">
-              <span className="text-4xl font-bold">$10</span>
-              <span className="text-black/50">/month</span>
-            </div>
-            
-            <div className="space-y-4 mb-8">
+
+            <div className="space-y-4 mb-8 text-left max-w-md mx-auto">
               <div className="flex items-center gap-3">
-                <Check className="w-5 h-5 text-[#487ef4]" />
-                <span>Unlimited predictions</span>
+                <Check className="w-5 h-5 text-[#487ef4] flex-shrink-0" />
+                <span>Unlimited bill predictions</span>
               </div>
               <div className="flex items-center gap-3">
-                <Check className="w-5 h-5 text-[#487ef4]" />
-                <span>Advanced bill analysis</span>
+                <Check className="w-5 h-5 text-[#487ef4] flex-shrink-0" />
+                <span>Real-time stock impact analysis</span>
               </div>
               <div className="flex items-center gap-3">
-                <Check className="w-5 h-5 text-[#487ef4]" />
-                <span>Real-time alerts</span>
+                <Check className="w-5 h-5 text-[#487ef4] flex-shrink-0" />
+                <span>Email and push notifications</span>
               </div>
               <div className="flex items-center gap-3">
-                <Check className="w-5 h-5 text-[#487ef4]" />
+                <Check className="w-5 h-5 text-[#487ef4] flex-shrink-0" />
                 <span>Portfolio integration</span>
               </div>
               <div className="flex items-center gap-3">
-                <Check className="w-5 h-5 text-[#487ef4]" />
-                <span>Priority support</span>
+                <Check className="w-5 h-5 text-[#487ef4] flex-shrink-0" />
+                <span>Cancel anytime</span>
               </div>
             </div>
-            
-            <button className="w-full py-4 bg-[#487ef4] text-white font-semibold rounded-lg hover:bg-[#487ef4]/90 transition-colors flex items-center justify-center gap-2">
-              Get premium
+
+            <button
+              onClick={handleSignInOrTrial}
+              disabled={loading}
+              className="w-full py-4 bg-[#487ef4] text-white font-semibold rounded-lg hover:bg-[#487ef4]/90 transition-colors inline-flex items-center justify-center gap-2 text-lg disabled:opacity-50"
+            >
+              {loading ? "Loading..." : "Start Free Trial"}
               <Zap className="w-5 h-5" />
             </button>
-          </div>
-          
-          {/* Enterprise Plan */}
-          <div className="bg-white rounded-2xl border border-black/20 p-8 shadow-lg shadow-[#487ef4]/25">
-            <h3 className="text-2xl md:text-3xl font-bold text-center mb-2">Enterprise</h3>
-            <p className="text-black/50 text-center mb-6">For institutions and fund managers</p>
-            
-            <div className="text-center mb-8">
-              <span className="text-4xl font-bold">$Custom</span>
-              <span className="text-black/50">/month</span>
-            </div>
-            
-            <div className="space-y-4 mb-8">
-              <div className="flex items-center gap-3">
-                <Check className="w-5 h-5 text-[#487ef4]" />
-                <span>Custom predictions volume</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Check className="w-5 h-5 text-[#487ef4]" />
-                <span>White-label solutions</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Check className="w-5 h-5 text-[#487ef4]" />
-                <span>API access</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Check className="w-5 h-5 text-[#487ef4]" />
-                <span>Custom integrations</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Check className="w-5 h-5 text-[#487ef4]" />
-                <span>Dedicated support</span>
-              </div>
-            </div>
-            
-            <button className="w-full py-3 border border-black/20 text-black font-semibold rounded-lg hover:bg-black/5 transition-colors">
-              Contact sales
-            </button>
-          </div>
-        </div>
-        
-        {/* Money Back Guarantee */}
-        <div className="max-w-md mx-auto mt-12">
-          <div className="bg-white rounded-2xl border border-black/20 p-6 shadow-lg shadow-[#487ef4]/25">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-[#487ef4]/15 rounded-full flex items-center justify-center">
-                <Check className="w-6 h-6 text-[#487ef4]" />
-              </div>
-              <div>
-                <div className="font-semibold">30-day Money-back guarantee</div>
-                <div className="text-sm text-black/50">Not satisfied? Get a full refund, no questions asked.</div>
-              </div>
-            </div>
+
+            <p className="text-sm text-black/50 mt-4">Cancel anytime</p>
           </div>
         </div>
       </section>
+      {/* Compliance Footer */}
+      <footer className="bg-black/5 border-t border-black/10">
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="text-center">
+            <p className="text-sm text-black/60">
+              Bill Market AI is a research tool. Not investment advice.
+            </p>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

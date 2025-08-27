@@ -1,16 +1,12 @@
 import { useState, useEffect, useMemo } from "react";
-import { loadStripe } from "@stripe/stripe-js";
 
 import { Navbar } from "@/components/Navbar";
 import { BillCard } from "@/components/BillCard";
 import { FilterSidebar } from "@/components/FilterSidebar";
 import { BillDetails } from "@/components/BillDetails";
-import { EmailPrompt } from "@/components/EmailPrompt";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Bill, SortOption, FilterOption } from "@/types/bill";
-
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY!);
 
 const Index = () => {
   /* ──────────────── UI + data state ──────────────── */
@@ -26,10 +22,8 @@ const Index = () => {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [pro, setPro] = useState(false);
-  const [askMail, setAskMail] = useState(false);
 
-  /* ────────── initial subscription check (Supabase Auth + guard) ─────────── */
+  /* ────────── get user session ─────────── */
   useEffect(() => {
     let cancelled = false;
 
@@ -45,27 +39,8 @@ const Index = () => {
           setUserEmail(email);
           setUserId(uid);
         }
-
-        if (!email) {
-          if (!cancelled) setPro(false);
-          return; // don't call the function without an email
-        }
-
-        const { data, error } = await supabase.functions.invoke("check-subscription", {
-          body: { email },
-          headers: { "Content-Type": "application/json" },
-        });
-
-        if (error) {
-          console.error("check-subscription error:", error);
-          if (!cancelled) setPro(false);
-          return;
-        }
-
-        if (!cancelled) setPro((data as any)?.is_subscribed);
       } catch (e) {
-        console.error("Subscription check failed:", e);
-        if (!cancelled) setPro(false);
+        console.error("Session check failed:", e);
       }
     };
 
@@ -133,32 +108,7 @@ const Index = () => {
     });
   }, [bills, searchQuery, sortBy, filterBy]);
 
-  /* ─────────────── Stripe helpers ──────────────── */
-  const checkout = async (email: string, uid: string | null) => {
-    const { data, error } = await supabase.functions.invoke(
-      "create-checkout-session",
-      { body: { email, user_id: uid } }
-    );
-    if (error) throw error;
 
-    const stripe = await stripePromise;
-    await stripe?.redirectToCheckout({ sessionId: (data as any).id });
-  };
-
-  const handleSubscribe = async () => {
-    const email = userEmail;
-    const uid = userId;
-
-    if (!email) return setAskMail(true);
-
-    const { data, error } = await supabase.functions.invoke("check-subscription", {
-      body: { email },
-    });
-    if (error) return console.error(error);
-
-    if ((data as any).is_subscribed) setPro(true);
-    else await checkout(email, uid);
-  };
 
   /* ─────────────────── JSX ─────────────────── */
   return (
@@ -199,30 +149,9 @@ const Index = () => {
                 </div>
               ) : displayBills.length ? (
                 <>
-                  {displayBills
-                    .slice(0, pro ? displayBills.length : 5)
-                    .map((b) => (
-                      <BillCard key={b.id} bill={b} onViewDetails={setSelected} />
-                    ))}
-
-                  {!pro && displayBills.length > 5 && (
-                    <div className="flex justify-center mt-4">
-                      <button
-                        onClick={handleSubscribe}
-                        className="
-                          sm:px-6 sm:py-3 px-4 py-2
-                          bg-primary text-white rounded-lg font-semibold shadow
-                          hover:bg-primary/90
-                          text-sm sm:text-lg
-                        "
-                      >
-                        <span className="hidden sm:inline">
-                          Subscribe to Pro to Unlock More Bills
-                        </span>
-                        <span className="sm:hidden">Unlock Pro</span>
-                      </button>
-                    </div>
-                  )}
+                  {displayBills.map((b) => (
+                    <BillCard key={b.id} bill={b} onViewDetails={setSelected} />
+                  ))}
                 </>
               ) : (
                 <p className="text-center text-lg py-12 text-muted-foreground">
@@ -267,16 +196,7 @@ const Index = () => {
         onClose={() => setSelected(null)}
       />
 
-      {/* Email+Password auth modal */}
-      {askMail && (
-        <EmailPrompt
-          onAuthSuccess={async () => {
-            setAskMail(false);
-            await handleSubscribe();
-          }}
-          onClose={() => setAskMail(false)}
-        />
-      )}
+
     </div>
   );
 };
