@@ -12,11 +12,10 @@ const supabase = createClient(
 const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET")!;
 
 function subscriptionIsValid(sub: Stripe.Subscription): boolean {
-  if (!["active", "trialing"].includes(sub.status)) return false;
-  return sub.items.data.some((item) => {
-    const price = item.price;
-    return price.recurring?.interval === "month" && (price.unit_amount ?? 0) >= 1000;
-  });
+    if (!["active", "trialing"].includes(sub.status)) return false;
+
+  // Match the new plan precisely by Price ID (simplest & robust)
+    return sub.items.data.some((item) => item.price.id === Deno.env.get("STRIPE_PRICE_ID"));
 }
 
 async function getCustomerEmail(customerId: string) {

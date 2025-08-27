@@ -452,7 +452,7 @@ export default function Landing() {
         <div className="text-center mb-16">
           <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6">Start Your Free Trial</h2>
           <p className="text-xl md:text-2xl text-black/60">
-            30-day free trial, then $9.99/month. No credit card required. Cancel anytime.
+            30-day free trial, then $10/month. No credit card required. Cancel anytime.
           </p>
         </div>
 
@@ -468,7 +468,7 @@ export default function Landing() {
                 <span className="text-[#487ef4]">Free</span>
               </div>
               <p className="text-xl text-black/60 mb-2">for 30 days</p>
-              <p className="text-lg text-black/50">then $9.99/month</p>
+              <p className="text-lg text-black/50">then $10/month</p>
             </div>
 
             <div className="space-y-4 mb-8 text-left max-w-md mx-auto">

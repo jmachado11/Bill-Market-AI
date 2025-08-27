@@ -31,6 +31,7 @@ serve(async (req) => {
     mode: "subscription",
     customer: customer.id,
     line_items: [{ price: Deno.env.get("STRIPE_PRICE_ID")!, quantity: 1 }],
+    subscription_data: { trial_period_days: 30 },
     success_url: `${Deno.env.get("PUBLIC_SITE_URL")!}/success?email=${encodeURIComponent(
       email
     )}`,
