@@ -109,7 +109,7 @@ export const Navbar = ({
         <div className="container mx-auto px-3 sm:p-6 lg:p-6 flex items-center justify-between">
           {/* Logo + title */}
           <Link to="/app" className="flex items-center gap-3 min-w-0">
-            <div className="h-12 w-12 rounded-lg">
+            <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-lg">
               <img
                 src="https://cdn.builder.io/api/v1/image/assets%2F9ae0b9a9efa747faafdb185df7b3478c%2F12c966f4401c40ad8ef5d07f574c4bdf?format=webp&width=800"
                 className="h-full w-full object-contain"
