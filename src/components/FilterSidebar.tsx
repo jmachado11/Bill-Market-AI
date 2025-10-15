@@ -35,12 +35,12 @@ export const FilterSidebar = ({
     <div className="fixed inset-0 z-50 lg:relative lg:inset-auto">
       {/* Mobile Backdrop */}
       <div
-        className="absolute inset-0 bg-background/80 backdrop-blur-sm lg:hidden"
+        className="absolute inset-0 bg-black/70 backdrop-blur-sm lg:hidden"
         onClick={onClose}
       />
 
       {/* Sidebar Panel */}
-      <Card className="absolute right-0 top-0 h-full w-full sm:w-96 lg:relative lg:w-full lg:h-auto rounded-none lg:rounded-md">
+      <Card className="absolute right-0 top-0 h-full w-full sm:w-96 lg:relative lg:w-full lg:h-auto rounded-none lg:rounded-2xl bg-[#0F1412] border border-white/10 text-white shadow-lg shadow-[#9FE870]/10">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4 lg:px-6 lg:pt-6">
           <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
             <Filter className="h-5 w-5" />

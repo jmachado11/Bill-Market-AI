@@ -113,7 +113,7 @@ export default function Landing() {
               <button
                 onClick={handleSignInOrTrial}
                 disabled={loading}
-                className="inline-flex px-4 sm:px-6 py-2 bg-[#262626] text-white font-semibold rounded-lg hover:bg-[#1F1F1F] transition-colors items-center gap-2 disabled:opacity-50"
+                className="inline-flex px-4 sm:px-6 py-2 bg-[#9FE870] text-[#0B0F0E] font-semibold rounded-lg hover:bg-[#9FE870]/90 transition-colors items-center gap-2 disabled:opacity-50"
               >
                 {loading ? "Loading..." : "Start Free Trial"}
                 <Zap className="w-4 h-4" />
@@ -141,7 +141,7 @@ export default function Landing() {
               <button
                 onClick={handleSignInOrTrial}
                 disabled={loading}
-                className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-[#262626] text-white font-semibold rounded-lg hover:bg-[#1F1F1F] transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-[#9FE870] text-[#0B0F0E] font-semibold rounded-lg hover:bg-[#9FE870]/90 transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {loading ? "Loading..." : "Start Free Trial"}
                 <Zap className="w-4 h-4" />

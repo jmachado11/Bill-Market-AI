@@ -24,12 +24,12 @@ const CheckoutSuccess = () => {
   }, [search]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center">
-      <h1 className="text-3xl font-bold mb-4">🎉 Payment successful!</h1>
-      <p className="mb-8">You now have full access to every bill.</p>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#0B0F0E] text-white">
+      <h1 className="text-3xl font-bold mb-2">🎉 Payment successful!</h1>
+      <p className="mb-8 text-white/70">You now have full access to every bill.</p>
       <button
         onClick={() => navigate("/app")}
-        className="px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary/90"
+        className="px-6 py-3 bg-[#9FE870] text-[#0B0F0E] font-semibold rounded-lg hover:bg-[#9FE870]/90"
       >
         Go back to Bills
       </button>

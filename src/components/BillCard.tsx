@@ -35,7 +35,7 @@ export const BillCard = ({ bill, onViewDetails }: BillCardProps) => {
   };
 
   return (
-    <Card className="group hover:shadow-lg transition-all duration-300 border-border/50 hover:border-primary/20">
+    <Card className="group hover:shadow-md transition-all duration-300 bg-[#0F1412] border border-white/10 text-white shadow-[#9FE870]/5 hover:border-[#9FE870]/20">
       <CardHeader className="pb-3">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           {/* Title and Meta Info */}
@@ -71,15 +71,15 @@ export const BillCard = ({ bill, onViewDetails }: BillCardProps) => {
       </CardHeader>
       
       <CardContent className="space-y-4">
-        <p className="text-sm text-muted-foreground line-clamp-2">
+        <p className="text-sm text-white/70 line-clamp-2">
           {bill.description}
         </p>
 
         <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">
+          <div className="text-sm text-white/60">
             <strong>Last Action:</strong> {bill.lastAction} ({formatDate(bill.lastActionDate)})
           </div>
-          <div className="text-sm text-muted-foreground">
+          <div className="text-sm text-white/60">
             <strong>Est. Decision:</strong> {formatDate(bill.estimatedDecisionDate)}
           </div>
         </div>
@@ -94,7 +94,7 @@ export const BillCard = ({ bill, onViewDetails }: BillCardProps) => {
               {bill.affectedStocks.slice(0, 3).map((stock) => (
                 <div
                   key={stock.symbol}
-                  className="flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-sm"
+                  className="flex items-center gap-1 px-2 py-1 rounded-md bg-white/5 text-sm"
                 >
                   <span className="font-medium">{stock.symbol}</span>
                   {stock.predictedDirection === 'up' ? (
@@ -102,13 +102,13 @@ export const BillCard = ({ bill, onViewDetails }: BillCardProps) => {
                   ) : (
                     <TrendingDown className="h-3 w-3 text-stock-down" />
                   )}
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-white/60">
                     {Math.round(stock.confidence * 100)}%
                   </span>
                 </div>
               ))}
               {bill.affectedStocks.length > 3 && (
-                <div className="px-2 py-1 rounded-md bg-muted text-sm text-muted-foreground">
+                <div className="px-2 py-1 rounded-md bg-white/5 text-sm text-white/60">
                   +{bill.affectedStocks.length - 3} more
                 </div>
               )}
@@ -118,25 +118,21 @@ export const BillCard = ({ bill, onViewDetails }: BillCardProps) => {
 
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-2 pt-2">
-          <Button 
+          <button
             onClick={() => onViewDetails(bill)}
-            variant="default"
-            size="sm"
-            className="w-full sm:w-auto"
+            className="w-full sm:w-auto px-4 py-2 bg-[#9FE870] text-[#0B0F0E] font-semibold rounded-lg hover:bg-[#9FE870]/90"
           >
             View Details
-          </Button>
+          </button>
           {bill.documentUrl && (
             bill.documentUrl === '#' ? (
-              <Button variant="outline" size="sm" className="w-full sm:w-auto opacity-50 cursor-not-allowed">
+              <button className="w-full sm:w-auto px-4 py-2 rounded-lg border border-white/15 text-white/60 cursor-not-allowed">
                 <ExternalLink className="h-4 w-4" />
-              </Button>
+              </button>
             ) : (
-              <Button variant="outline" size="sm" className="w-full sm:w-auto" asChild>
-                <a href={bill.documentUrl} target="_blank" rel="noopener noreferrer">
+              <a href={bill.documentUrl} target="_blank" rel="noopener noreferrer" className="w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 rounded-lg border border-white/15 text-white hover:bg-white/5">
                   <ExternalLink className="h-4 w-4" />
                 </a>
-              </Button>
             )
           )}
         </div>

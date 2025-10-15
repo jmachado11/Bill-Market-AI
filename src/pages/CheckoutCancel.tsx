@@ -33,13 +33,13 @@ const CheckoutCancel = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center">
-      <h1 className="text-3xl font-bold mb-4">Payment cancelled</h1>
-      <p className="mb-8">No worries—your card was not charged.</p>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#0B0F0E] text-white">
+      <h1 className="text-3xl font-bold mb-2">Payment cancelled</h1>
+      <p className="mb-8 text-white/70">No worries—your card was not charged.</p>
       <button
         onClick={handleReturnToSite}
         disabled={loading}
-        className="px-6 py-3 bg-secondary rounded-lg hover:bg-secondary/90 disabled:opacity-50"
+        className="px-6 py-3 bg-[#9FE870] text-[#0B0F0E] font-semibold rounded-lg hover:bg-[#9FE870]/90 disabled:opacity-50"
       >
         {loading ? "Loading..." : "Return to site"}
       </button>

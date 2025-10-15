@@ -112,7 +112,7 @@ const Index = () => {
 
   /* ─────────────────── JSX ─────────────────── */
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[#0B0F0E] text-white">
       <Navbar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
@@ -127,22 +127,22 @@ const Index = () => {
               <h2 className="text-2xl font-bold mb-2">
                 AI Legislative Market Predictions
               </h2>
-              <p className="text-muted-foreground">
+              <p className="text-white/60">
                 Legislative Bills ({displayBills.length})
               </p>
             </header>
 
             <div className="grid gap-6">
               {loading ? (
-                <p className="text-center text-lg py-12 text-muted-foreground">
+                <p className="text-center text-lg py-12 text-white/60">
                   Loading bills…
                 </p>
               ) : error ? (
                 <div className="text-center py-12">
-                  <p className="text-destructive text-lg">{error}</p>
+                  <p className="text-red-400 text-lg">{error}</p>
                   <button
                     onClick={() => window.location.reload()}
-                    className="mt-4 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary/90"
+                    className="mt-4 px-4 py-2 bg-[#9FE870] text-[#0B0F0E] font-semibold rounded-lg hover:bg-[#9FE870]/90"
                   >
                     Retry
                   </button>
@@ -154,7 +154,7 @@ const Index = () => {
                   ))}
                 </>
               ) : (
-                <p className="text-center text-lg py-12 text-muted-foreground">
+                <p className="text-center text-lg py-12 text-white/60">
                   No bills found matching your criteria
                 </p>
               )}

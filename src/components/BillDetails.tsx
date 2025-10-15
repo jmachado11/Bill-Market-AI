@@ -46,7 +46,7 @@ export const BillDetails = ({ bill, isOpen, onClose }: BillDetailsProps) => {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-full sm:max-w-4xl max-h-[90vh] overflow-y-auto px-4 sm:px-6">
+      <DialogContent className="max-w-full sm:max-w-4xl max-h-[90vh] overflow-y-auto px-4 sm:px-6 bg-[#0F1412] border border-white/10 text-white">
         <DialogHeader>
           <DialogTitle className="text-lg sm:text-xl leading-tight pr-8">
             {bill.title}
@@ -56,7 +56,7 @@ export const BillDetails = ({ bill, isOpen, onClose }: BillDetailsProps) => {
         <div className="space-y-6">
           {/* Overview Section */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card>
+            <Card className="bg-[#0F1412] border border-white/10 text-white">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base sm:text-lg flex items-center gap-2">
                   <User className="h-5 w-5" />
@@ -71,7 +71,7 @@ export const BillDetails = ({ bill, isOpen, onClose }: BillDetailsProps) => {
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="bg-[#0F1412] border border-white/10 text-white">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base sm:text-lg flex items-center gap-2">
                   <Calendar className="h-5 w-5" />
@@ -93,7 +93,7 @@ export const BillDetails = ({ bill, isOpen, onClose }: BillDetailsProps) => {
           </div>
 
           {/* Passing Likelihood */}
-          <Card>
+          <Card className="bg-[#0F1412] border border-white/10 text-white">
             <CardHeader className="pb-3">
               <CardTitle className="text-base sm:text-lg">Passing Likelihood Analysis</CardTitle>
             </CardHeader>
@@ -105,30 +105,28 @@ export const BillDetails = ({ bill, isOpen, onClose }: BillDetailsProps) => {
                 </span>
               </div>
               <Progress value={bill.passingLikelihood * 100} className="h-3" />
-              <div className="text-sm text-muted-foreground">
+              <div className="text-sm text-white/60">
                 <strong>Last Action:</strong> {bill.lastAction}
               </div>
             </CardContent>
           </Card>
 
           {/* Description */}
-          <Card>
+          <Card className="bg-[#0F1412] border border-white/10 text-white">
             <CardHeader className="pb-3">
               <CardTitle className="text-base sm:text-lg flex items-center gap-2">
                 <FileText className="h-5 w-5" />
                 Bill Description
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground leading-relaxed">
+            <CardContent className="text-sm text-white/70 leading-relaxed">
               <p>{bill.description}</p>
               {bill.documentUrl && (
                 <div className="mt-4">
-                  <Button variant="outline" asChild>
-                    <a href={bill.documentUrl} target="_blank" rel="noopener noreferrer">
+                  <a href={bill.documentUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center px-4 py-2 rounded-lg border border-white/15 text-white hover:bg-white/5">
                       <ExternalLink className="h-4 w-4 mr-2" />
                       View Full Bill Text
                     </a>
-                  </Button>
                 </div>
               )}
             </CardContent>
@@ -136,7 +134,7 @@ export const BillDetails = ({ bill, isOpen, onClose }: BillDetailsProps) => {
 
           {/* Stock Impact */}
           {bill.affectedStocks.length > 0 && (
-            <Card>
+            <Card className="bg-[#0F1412] border border-white/10 text-white">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base sm:text-lg flex items-center gap-2">
                   <Building2 className="h-5 w-5" />
@@ -147,7 +145,7 @@ export const BillDetails = ({ bill, isOpen, onClose }: BillDetailsProps) => {
                 {bill.affectedStocks.map((stock) => (
                   <div
                     key={stock.symbol}
-                    className="flex flex-col sm:flex-row items-start gap-4 p-4 rounded-lg bg-muted/50 border"
+                    className="flex flex-col sm:flex-row items-start gap-4 p-4 rounded-lg bg-white/5 border border-white/10"
                   >
                     <div className="flex-1 flex flex-col gap-1">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -168,7 +166,7 @@ export const BillDetails = ({ bill, isOpen, onClose }: BillDetailsProps) => {
                           {Math.round(stock.confidence * 100)}% confidence
                         </Badge>
                       </div>
-                      <div className="text-sm text-muted-foreground">
+                      <div className="text-sm text-white/60">
                         {stock.companyName}
                       </div>
                     </div>
