@@ -80,7 +80,7 @@ export const FilterSidebar = ({
 
           {/* Filter Options */}
           <div className="space-y-3">
-            <Label className="text-sm font-medium">Filter by Likelihood</Label>
+            <Label className="text-sm font-medium">Filter</Label>
             <RadioGroup
               value={filterBy}
               onValueChange={(value: FilterOption) => onFilterChange(value)}
@@ -91,6 +91,12 @@ export const FilterSidebar = ({
                   id: 'all',
                   value: 'all',
                   label: 'All Bills',
+                  dotClass: '',
+                },
+                {
+                  id: 'decision-soon',
+                  value: 'decision-soon',
+                  label: 'Decision Soon (Next 2 weeks)',
                   dotClass: '',
                 },
                 {
