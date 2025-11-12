@@ -168,7 +168,7 @@ const Index = () => {
             <div className="grid gap-6">
               {loading ? (
                 <p className="text-center text-lg py-12 text-white/60">
-                  Loading bills���
+                  Loading bills...
                 </p>
               ) : error ? (
                 <div className="text-center py-12">
