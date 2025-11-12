@@ -1,4 +1,4 @@
-import { Calendar, User, TrendingUp, TrendingDown, ExternalLink, Building2 } from 'lucide-react';
+import { Calendar, User, TrendingUp, TrendingDown, ExternalLink, Building2, Bookmark } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,9 +8,11 @@ import { cn } from '@/lib/utils';
 interface BillCardProps {
   bill: Bill;
   onViewDetails: (bill: Bill) => void;
+  isBookmarked?: boolean;
+  onToggleBookmark?: (billId: string) => void;
 }
 
-export const BillCard = ({ bill, onViewDetails }: BillCardProps) => {
+export const BillCard = ({ bill, onViewDetails, isBookmarked = false, onToggleBookmark }: BillCardProps) => {
   const getLikelihoodColor = (likelihood: number) => {
     if (likelihood >= 0.7) return 'bg-likelihood-high text-white';
     if (likelihood >= 0.4) return 'bg-likelihood-medium text-white';
@@ -123,6 +125,18 @@ export const BillCard = ({ bill, onViewDetails }: BillCardProps) => {
             className="w-full sm:w-auto px-4 py-2 bg-[#9FE870] text-[#0B0F0E] font-semibold rounded-lg hover:bg-[#9FE870]/90"
           >
             View Details
+          </button>
+          <button
+            onClick={() => onToggleBookmark?.(bill.id)}
+            className={cn(
+              "w-full sm:w-auto inline-flex items-center justify-center px-4 py-2 rounded-lg border transition-colors",
+              isBookmarked
+                ? "border-[#9FE870] text-[#9FE870] bg-[#9FE870]/10 hover:bg-[#9FE870]/20"
+                : "border-white/15 text-white hover:bg-white/5"
+            )}
+            title={isBookmarked ? "Remove from bookmarks" : "Add to bookmarks"}
+          >
+            <Bookmark className={cn("h-4 w-4", isBookmarked && "fill-current")} />
           </button>
           {bill.documentUrl && (
             bill.documentUrl === '#' ? (

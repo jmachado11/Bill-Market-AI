@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Landing from "./pages/Landing";
+import Bookmarks from "./pages/Bookmarks";
 import { Analytics } from "@vercel/analytics/next";
 import CheckoutSuccess from "@/pages/CheckoutSuccess";
 import CheckoutCancel  from "@/pages/CheckoutCancel";
@@ -21,6 +22,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/app" element={<Index />} />
+          <Route path="/bookmarks" element={<Bookmarks />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="/success" element={<CheckoutSuccess />} />
           <Route path="/cancel"  element={<CheckoutCancel  />} />
@@ -32,4 +34,3 @@ const App = () => (
 );
 
 export default App;
-

@@ -7,9 +7,10 @@ import { BillDetails } from "@/components/BillDetails";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Bill, SortOption, FilterOption } from "@/types/bill";
+import { useBookmarks } from "@/hooks/useBookmarks";
 
 const Index = () => {
-  /* ──────────────── UI + data state ──────────────── */
+  /* ───────────���──── UI + data state ──────────────── */
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -22,6 +23,8 @@ const Index = () => {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const { isBookmarked, toggleBookmark } = useBookmarks();
 
   /* ────────── get user session ─────────── */
   useEffect(() => {
@@ -90,6 +93,12 @@ const Index = () => {
 
     if (filterBy !== "all") {
       out = out.filter((b) => {
+        if (filterBy === "decision-soon") {
+          const decisionDate = new Date(b.estimatedDecisionDate);
+          const today = new Date();
+          const twoWeeksFromNow = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000);
+          return decisionDate >= today && decisionDate <= twoWeeksFromNow;
+        }
         if (filterBy === "high-likelihood") return b.passingLikelihood >= 0.7;
         if (filterBy === "medium-likelihood") return b.passingLikelihood >= 0.4 && b.passingLikelihood < 0.7;
         if (filterBy === "low-likelihood") return b.passingLikelihood < 0.4;
@@ -150,7 +159,13 @@ const Index = () => {
               ) : displayBills.length ? (
                 <>
                   {displayBills.map((b) => (
-                    <BillCard key={b.id} bill={b} onViewDetails={setSelected} />
+                    <BillCard
+                      key={b.id}
+                      bill={b}
+                      onViewDetails={setSelected}
+                      isBookmarked={isBookmarked(b.id)}
+                      onToggleBookmark={toggleBookmark}
+                    />
                   ))}
                 </>
               ) : (

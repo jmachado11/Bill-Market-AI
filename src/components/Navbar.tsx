@@ -5,6 +5,7 @@ import {
   X as CloseIcon,
   Search,
   Filter,
+  Bookmark,
 } from "lucide-react";
 
 
@@ -140,6 +141,15 @@ export const Navbar = ({
               <Filter className="w-5 h-5" />
             </button>
 
+            {/* bookmarks button */}
+            <Link
+              to="/bookmarks"
+              className="p-2 rounded-lg border border-white/15 text-white hover:bg-white/5 transition-colors"
+              title="View bookmarked bills"
+            >
+              <Bookmark className="w-5 h-5" />
+            </Link>
+
             {/* account / manage */}
             {!userEmail ? (
               // not "signed in": show sign in/up (opens the same EmailPrompt as before)
@@ -219,6 +229,16 @@ export const Navbar = ({
                 <Filter className="w-4 h-4" />
                 Filters
               </button>
+
+              {/* bookmarks button */}
+              <Link
+                to="/bookmarks"
+                onClick={() => setMobileOpen(false)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-white/15 text-white hover:bg-white/5"
+              >
+                <Bookmark className="w-4 h-4" />
+                Bookmarks
+              </Link>
 
               {/* account / manage on mobile */}
               {!userEmail ? (

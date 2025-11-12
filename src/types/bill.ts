@@ -29,4 +29,4 @@ export interface StockPrediction {
 }
 
 export type SortOption = 'recent' | 'likelihood' | 'decision-date';
-export type FilterOption = 'all' | 'high-likelihood' | 'medium-likelihood' | 'low-likelihood';
+export type FilterOption = 'all' | 'high-likelihood' | 'medium-likelihood' | 'low-likelihood' | 'decision-soon';
