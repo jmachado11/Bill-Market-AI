@@ -31,7 +31,16 @@ const statusMap: Record<number, string> = {
   12: 'Draft'
 };
 
-const TARGET_NEW = 50; // <= add up to 50 NEW bills per invocation
+// ▶▶ Per-run insertion target: try to add at least this many brand-new bills each invocation
+const MIN_INSERTS_PER_CALL = 20;
+
+// How deep to look per state (newest sessions first). Increase to go further back.
+const MAX_SESSIONS_PER_STATE = 3;
+
+// Be nice to the API
+const API_THROTTLE_MS = 200;
+
+type Candidate = { bill_id: number; status_date: string; state: string };
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -39,7 +48,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("fetch-bills function started");
+    console.log("fetch-bills (>=20 per call) started");
 
     const legiscanKey = Deno.env.get("LEGISCAN_API_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -50,49 +59,67 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // 1) Build a global candidate list of (bill_id, status_date, state), newest first.
-    type Candidate = { bill_id: number; status_date: string; state: string };
+    // 1) Build a cross-state candidate list by walking newest sessions first
     const candidates: Candidate[] = [];
+    const seenBillIds = new Set<number>(); // avoid duplicates across overlapping sessions
 
     for (const state of STATES) {
-      console.log(`Fetching master list for ${state}...`);
-      const res = await fetch(
-        `https://api.legiscan.com/?key=${legiscanKey}&op=getMasterListRaw&state=${state}`
-      );
-      if (!res.ok) {
-        console.warn(`Master list fetch failed for ${state}: ${res.status}`);
-        continue;
-      }
-      const json = await res.json();
-      const ml = json?.masterlist;
-      if (json?.status !== "OK" || !ml) {
-        console.warn(`No valid master list for ${state}`);
-        continue;
-      }
-
-      for (const v of Object.values(ml) as any[]) {
-        if (v && typeof v.bill_id === "number" && v.status_date) {
-          candidates.push({
-            bill_id: v.bill_id,
-            status_date: v.status_date,
-            state,
-          });
+      try {
+        const sessRes = await fetch(
+          `https://api.legiscan.com/?key=${legiscanKey}&op=getSessionList&state=${state}`
+        );
+        if (!sessRes.ok) {
+          console.warn(`getSessionList failed for ${state}: ${sessRes.status}`);
+          continue;
         }
-      }
+        const sessJson = await sessRes.json();
+        const sessions: any[] = Array.isArray(sessJson?.sessions) ? sessJson.sessions : [];
+        if (sessions.length === 0) continue;
 
-      // small throttle to be nice to Legiscan
-      await new Promise((r) => setTimeout(r, 150));
+        // newest sessions first
+        sessions.sort((a, b) => (a.session_id < b.session_id ? 1 : -1));
+        const toScan = sessions.slice(0, MAX_SESSIONS_PER_STATE);
+
+        for (const s of toScan) {
+          const mlRes = await fetch(
+            `https://api.legiscan.com/?key=${legiscanKey}&op=getMasterList&id=${s.session_id}`
+          );
+          if (!mlRes.ok) {
+            console.warn(`getMasterList failed ${state} session=${s.session_id}: ${mlRes.status}`);
+            continue;
+          }
+          const mlJson = await mlRes.json();
+          const ml = mlJson?.masterlist;
+          if (mlJson?.status !== "OK" || !ml) continue;
+
+          for (const v of Object.values(ml) as any[]) {
+            if (!v || typeof v.bill_id !== "number" || !v.status_date) continue;
+            if (seenBillIds.has(v.bill_id)) continue;
+            seenBillIds.add(v.bill_id);
+            candidates.push({ bill_id: v.bill_id, status_date: v.status_date, state });
+          }
+
+          await new Promise((r) => setTimeout(r, API_THROTTLE_MS));
+        }
+      } catch (e) {
+        console.warn(`State ${state} session walk failed:`, e);
+      }
     }
 
-    // sort newest first by status_date
+    console.log(`Collected ${candidates.length} unique candidates across sessions/states.`);
+
+    // 2) Sort newest first by status_date
     candidates.sort((a, b) => (a.status_date < b.status_date ? 1 : -1));
 
-    // 2) Walk candidates until we've inserted TARGET_NEW brand-new rows.
+    // 3) Insert until we hit MIN_INSERTS_PER_CALL or run out
     let insertedCount = 0;
-    for (const c of candidates) {
-      if (insertedCount >= TARGET_NEW) break;
+    let scanned = 0;
 
-      // 2a) quick existence check by legiscan_id to avoid detail fetch if we already have it
+    for (const c of candidates) {
+      if (insertedCount >= MIN_INSERTS_PER_CALL) break;
+      scanned++;
+
+      // Skip if already in DB
       const { data: exists, error: existErr } = await supabase
         .from("bills")
         .select("id")
@@ -103,12 +130,9 @@ serve(async (req) => {
         console.error("Existence check error:", existErr);
         continue;
       }
-      if (exists) {
-        // already in DB, skip
-        continue;
-      }
+      if (exists) continue;
 
-      // 2b) fetch full bill details now that we know it's new
+      // Fetch full bill details
       let bill: any;
       try {
         const detailRes = await fetch(
@@ -121,11 +145,11 @@ serve(async (req) => {
         }
         bill = detailJson.bill;
       } catch (e) {
-        console.error(`Error fetching detail for bill ${c.bill_id}:`, e);
+        console.error(`Detail fetch error for bill ${c.bill_id}:`, e);
         continue;
       }
 
-      // 2c) compute introduced_date and last_event (same logic you had)
+      // introduced_date + last_event (same as your original logic)
       let introducedDate: string;
       if (Array.isArray(bill.history) && bill.history.length > 0) {
         const historyArr = bill.history.filter((h: any) => h.importance);
@@ -141,12 +165,9 @@ serve(async (req) => {
       if (Array.isArray(bill.history) && bill.history.length > 0) {
         last_event = bill.history[0].action;
       } else {
-        last_event = `Went into ${statusMap[bill.status]}`;
+        last_event = `Went into ${statusMap[bill.status] ?? "Unknown"}`;
       }
 
-      // 2d) insert (unique on legiscan_id will keep DB consistent). We use a plain insert
-      //     since we already did an existence check. If there is a race, the unique constraint
-      //     will protect us and we just skip counting it.
       const { data: inserted, error: insertErr } = await supabase
         .from("bills")
         .insert({
@@ -154,7 +175,8 @@ serve(async (req) => {
           title:            bill.title,
           description:      bill.description,
           sponsor_name:     bill.sponsors?.[0]?.name ?? "",
-          sponsor_party:    (typeof bill.sponsors?.[0]?.party === "string" && bill.sponsors[0].party.trim()) ? bill.sponsors[0].party : "None",
+          sponsor_party:    (typeof bill.sponsors?.[0]?.party === "string" && bill.sponsors[0].party.trim())
+                              ? bill.sponsors[0].party : "None",
           sponsor_state:    bill.state ?? "",
           introduced_date:  introducedDate,
           last_action:      last_event,
@@ -168,21 +190,26 @@ serve(async (req) => {
         .single();
 
       if (insertErr) {
-        // If a race caused a duplicate insert attempt, just skip counting it.
         console.error(`Insert failed for bill ${bill.bill_id}:`, insertErr);
       } else {
         insertedCount += 1;
-        console.log(`✔️ Inserted bill id=${inserted.id} (total new this run: ${insertedCount}/${TARGET_NEW})`);
+        console.log(`✔️ Inserted bill id=${inserted.id} (this run: ${insertedCount}/${MIN_INSERTS_PER_CALL})`);
       }
 
-      // make sure we don’t hammer the API
-      await new Promise((r) => setTimeout(r, 250));
+      await new Promise((r) => setTimeout(r, API_THROTTLE_MS));
     }
 
-    return new Response(JSON.stringify({ success: true, inserted: insertedCount }), {
+    return new Response(JSON.stringify({
+      success: true,
+      inserted: insertedCount,
+      min_target: MIN_INSERTS_PER_CALL,
+      candidates_scanned: scanned,
+      total_candidates_available: candidates.length
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (err) {
+
+  } catch (err: any) {
     console.error("fetch-bills error:", err);
     return new Response(JSON.stringify({ error: err.message }), {
       status: 500,

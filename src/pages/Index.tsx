@@ -1,16 +1,23 @@
 import { useState, useEffect, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 
 import { Navbar } from "@/components/Navbar";
 import { BillCard } from "@/components/BillCard";
 import { FilterSidebar } from "@/components/FilterSidebar";
 import { BillDetails } from "@/components/BillDetails";
+import { Pagination } from "@/components/Pagination";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Bill, SortOption, FilterOption } from "@/types/bill";
 import { useBookmarks } from "@/hooks/useBookmarks";
 
+const ITEMS_PER_PAGE = 20;
+
 const Index = () => {
-  /* ───────────���──── UI + data state ──────────────── */
+  /* ────────────────── UI + data state ──────────────── */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentPage = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
+
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -78,7 +85,7 @@ const Index = () => {
   }, []);
 
   /* ─────────────── filter / sort ──────────────── */
-  const displayBills = useMemo(() => {
+  const filteredBills = useMemo(() => {
     let out = bills;
 
     if (searchQuery) {
@@ -117,6 +124,18 @@ const Index = () => {
     });
   }, [bills, searchQuery, sortBy, filterBy]);
 
+  /* ──────────────── pagination ──────────────── */
+  const totalPages = Math.ceil(filteredBills.length / ITEMS_PER_PAGE);
+  const validPage = Math.min(Math.max(currentPage, 1), Math.max(totalPages, 1));
+  const startIndex = (validPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const displayBills = filteredBills.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setSearchParams({ page: String(page) });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
 
 
   /* ─────────────────── JSX ─────────────────── */
@@ -137,14 +156,19 @@ const Index = () => {
                 AI Legislative Market Predictions
               </h2>
               <p className="text-white/60">
-                Legislative Bills ({displayBills.length})
+                Legislative Bills ({filteredBills.length})
+                {totalPages > 1 && (
+                  <span className="ml-2">
+                    • Page {validPage} of {totalPages}
+                  </span>
+                )}
               </p>
             </header>
 
             <div className="grid gap-6">
               {loading ? (
                 <p className="text-center text-lg py-12 text-white/60">
-                  Loading bills…
+                  Loading bills���
                 </p>
               ) : error ? (
                 <div className="text-center py-12">
@@ -174,6 +198,16 @@ const Index = () => {
                 </p>
               )}
             </div>
+
+            {totalPages > 1 && (
+              <div className="mt-8">
+                <Pagination
+                  currentPage={validPage}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                />
+              </div>
+            )}
           </main>
 
           {/* ── Right column (desktop filters) ── */}
