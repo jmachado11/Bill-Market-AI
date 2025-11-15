@@ -11,6 +11,7 @@ export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
   useEffect(() => {
+    // First, check if there's an active session
     const checkAuth = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -29,6 +30,23 @@ export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     };
 
     checkAuth();
+
+    // Listen for auth state changes (e.g., when user signs in/out from another tab)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        setIsAuthenticated(true);
+        // Save to localStorage for sync across tabs
+        localStorage.setItem("user_email", session.user.email || "");
+      } else {
+        setIsAuthenticated(false);
+        localStorage.removeItem("user_email");
+        navigate("/", { replace: true });
+      }
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, [navigate]);
 
   if (isAuthenticated === null) {

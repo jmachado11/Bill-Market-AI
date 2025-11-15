@@ -44,7 +44,23 @@ export const Navbar = ({
   const [accountOpen, setAccountOpen] = useState(false);
 
   useEffect(() => {
+    // Initialize from localStorage
     setUserEmail(localStorage.getItem("user_email"));
+
+    // Listen for auth state changes to sync across tabs/windows
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user?.email) {
+        setUserEmail(session.user.email);
+        localStorage.setItem("user_email", session.user.email);
+      } else {
+        setUserEmail(null);
+        localStorage.removeItem("user_email");
+      }
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
   }, []);
 
   /* ─────────── Stripe helpers (EXACT same behavior as before) ─────────── */
@@ -81,17 +97,35 @@ export const Navbar = ({
     }
 
     setLoading(true);
-    const { data, error } = await supabase.functions.invoke(
-      "check-subscription",
-      { body: { email } }
-    );
-    setLoading(false);
-    if (error) return alert(error.message);
+    try {
+      // Get the session to extract the auth token
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        setLoading(false);
+        alert("Your session has expired. Please sign in again.");
+        localStorage.removeItem("user_email");
+        return;
+      }
 
-    if ((data as any).is_subscribed) {
-      await openPortal(email);
-    } else {
-      await startCheckout(email);
+      const { data, error } = await supabase.functions.invoke(
+        "check-subscription",
+        { 
+          body: { email },
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        }
+      );
+      setLoading(false);
+      if (error) return alert(error.message);
+
+      if ((data as any).is_subscribed) {
+        await openPortal(email);
+      } else {
+        await startCheckout(email);
+      }
+    } catch (e) {
+      setLoading(false);
+      console.error("Handle manage error:", e);
+      alert("An error occurred. Please try again.");
     }
   };
 

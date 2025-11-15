@@ -11,14 +11,20 @@ const CheckoutSuccess = () => {
     const urlEmail = params.get("email");
 
     (async () => {
-      // Prefer the authed user’s email; fall back to URL param if necessary
-      const { data: sessionRes } = await supabase.auth.getSession();
-      const email = sessionRes.session?.user?.email ?? urlEmail;
-      if (email) {
-        // Warm subscription status so the UI flips to Pro immediately
-        await supabase.functions.invoke("check-subscription", {
-          body: { email },
-        });
+      try {
+        // Get the current authenticated session
+        const { data: sessionRes } = await supabase.auth.getSession();
+        const email = sessionRes.session?.user?.email ?? urlEmail;
+        
+        if (email && sessionRes.session?.access_token) {
+          // Warm subscription status so the UI flips to Pro immediately
+          await supabase.functions.invoke("check-subscription", {
+            body: { email },
+            headers: { Authorization: `Bearer ${sessionRes.session.access_token}` }
+          });
+        }
+      } catch (e) {
+        console.error("Error checking subscription on success:", e);
       }
     })();
   }, [search]);

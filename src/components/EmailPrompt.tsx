@@ -21,19 +21,25 @@ export function EmailPrompt({ onAuthSuccess, onClose }: Props) {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: "https://billmarketai.com" },
+          options: { 
+            // Redirect to a callback handler that will process the confirmation token
+            emailRedirectTo: `${window.location.origin}/auth/callback` 
+          },
         });
         if (error) throw error;
         if (!data.user) throw new Error("Signup failed: no user returned");
+        
+        // For signup, show a message to confirm email
+        setErr("Please check your email to confirm your account.");
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (error) throw error;
+        onAuthSuccess(email);
+        onClose?.();
       }
-      onAuthSuccess(email);
-      onClose?.();
     } catch (e: any) {
       setErr(e?.message ?? "Authentication failed");
     } finally {

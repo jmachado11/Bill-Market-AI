@@ -1,5 +1,5 @@
-import { Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { Zap, TrendingUp, Shield, Activity, FileText, Brain, Target, Bell, Check, Star } from "lucide-react";
 import { BillCard } from "@/components/BillCard";
 import { BillDetails } from "@/components/BillDetails";
@@ -17,6 +17,56 @@ export default function Landing() {
   const [showEmailPrompt, setShowEmailPrompt] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Auto-trigger checkout flow if coming from email confirmation
+  useEffect(() => {
+    if (location.state?.showCheckoutFlow) {
+      const email = localStorage.getItem("user_email");
+      if (email) {
+        // Give a small delay to ensure auth state is settled
+        setTimeout(() => {
+          triggerCheckoutFlow(email);
+        }, 500);
+      }
+    }
+  }, [location.state?.showCheckoutFlow]);
+
+  const triggerCheckoutFlow = async (email: string) => {
+    setLoading(true);
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        alert("Your session has expired. Please sign in again.");
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke(
+        "check-subscription",
+        { 
+          body: { email },
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        }
+      );
+      setLoading(false);
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      if ((data as any).is_subscribed) {
+        navigate("/app");
+      } else {
+        await startCheckout(email);
+      }
+    } catch (e) {
+      setLoading(false);
+      console.error("Checkout flow error:", e);
+      alert("An error occurred. Please try again.");
+    }
+  };
 
   const handleViewDetails = (bill: Bill) => {
     setSelectedBill(bill);
@@ -62,21 +112,38 @@ export default function Landing() {
     setShowEmailPrompt(false);
 
     setLoading(true);
-    const { data, error } = await supabase.functions.invoke(
-      "check-subscription",
-      { body: { email } }
-    );
-    setLoading(false);
+    try {
+      // Get the session to extract the auth token
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) {
+        alert("Authentication failed. Please try again.");
+        setLoading(false);
+        return;
+      }
 
-    if (error) {
-      alert(error.message);
-      return;
-    }
+      const { data, error } = await supabase.functions.invoke(
+        "check-subscription",
+        { 
+          body: { email },
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        }
+      );
+      setLoading(false);
 
-    if ((data as any).is_subscribed) {
-      navigate("/app");
-    } else {
-      await startCheckout(email);
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      if ((data as any).is_subscribed) {
+        navigate("/app");
+      } else {
+        await startCheckout(email);
+      }
+    } catch (e) {
+      setLoading(false);
+      console.error("Auth success handler error:", e);
+      alert("An error occurred. Please try again.");
     }
   };
 

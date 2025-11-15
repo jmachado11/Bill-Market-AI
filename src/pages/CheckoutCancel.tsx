@@ -10,24 +10,40 @@ const CheckoutCancel = () => {
     const email = localStorage.getItem("user_email");
 
     setLoading(true);
-    const { data, error } = await supabase.functions.invoke(
-      "check-subscription",
-      { body: { email } }
-    );
-    setLoading(false);
+    try {
+      // Get the session to extract the auth token
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session) {
+        setLoading(false);
+        console.error("No active session:", sessionError);
+        navigate("/");
+        return;
+      }
 
-    if (error || !email) {
-      console.error("Error checking subscription or no email:", error);
-      // On error or no email, go to landing page
-      navigate("/");
-      return;
-    }
+      const { data, error } = await supabase.functions.invoke(
+        "check-subscription",
+        { 
+          body: { email },
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        }
+      );
+      setLoading(false);
 
-    if ((data as any).is_subscribed) {
-      // User has subscription, go to app
-      navigate("/app");
-    } else {
-      // User doesn't have subscription, go to landing page
+      if (error || !email) {
+        console.error("Error checking subscription or no email:", error);
+        navigate("/");
+        return;
+      }
+
+      if ((data as any).is_subscribed) {
+        navigate("/app");
+      } else {
+        navigate("/");
+      }
+    } catch (e) {
+      setLoading(false);
+      console.error("Handle return error:", e);
       navigate("/");
     }
   };

@@ -12,19 +12,29 @@ const cors = {
   "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
 };
 
-serve(async (req) => {
+serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
 
   try {
-    // Read email from body or query only (no anon client / JWT parsing)
-    const urlEmail = new URL(req.url).searchParams.get("email") ?? undefined;
+    // Get the authorization header (Bearer token from Supabase session)
+    const authHeader = req.headers.get("Authorization");
+    
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      // No token = user not authenticated, send to payment flow
+      return json({ is_subscribed: false });
+    }
+
+    // Extract email from request body as fallback
     const body = await req.json().catch(() => ({} as any));
-    const email: string | undefined = body?.email ?? urlEmail;
+    const email: string | undefined = body?.email;
 
-    // If no email, return safe false (avoid 400s in UI)
-    if (!email) return json({ is_subscribed: false });
+    if (!email) {
+      return json({ is_subscribed: false });
+    }
 
-    // Ask Stripe directly every time
+    // For local development and simpler verification:
+    // We trust the Bearer token exists (Supabase middleware should validate it in production)
+    // Just check Stripe for active subscriptions
     const customer = (await stripe.customers.list({ email, limit: 1 })).data[0];
     if (!customer) return json({ is_subscribed: false });
 
